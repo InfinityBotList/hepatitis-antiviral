@@ -24,4 +24,4 @@ These extra options are placed in struct tags in your schema
 
 ### Daemon
 
-For the purposes of logging and asking for user input while migrating, a foreground ``daemon`` is required/used. The daemon is written in python
+For the purposes of logging and asking for user input while migrating, a foreground ``daemon`` is required/used. The daemon is written in python. Run ``cd daemon && python3 daemon.py`` to start it

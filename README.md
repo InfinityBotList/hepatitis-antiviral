@@ -8,10 +8,15 @@ A primary key of ``itag`` is created to identify each element uniquely.
 
 Place all structs to backup in ``schemas.go`` and then add them to ``backupSchemas`` function. Remove old schemas if present
 
-### Extra options
+### Extra options 
+
+These extra options are placed in struct tags in your schema
 
 - ``mark`` -> Marks a custom datatype to use
 - ``default`` -> Sets a default when in doubt
+- ``defaultfunc`` -> Sets a default func that *is* exported in exported functions
 - ``log`` -> Whether to log or not
 - ``tolist`` -> Whether or not to convert string element to a list of strings (if you're schema is bad)
-- ``schema`` -> Use this when you need to define a custom type and/or constraints for your postgres column (AKA ``schema:"text unique not null"``)
+- ``unique`` -> Whether or not a unique constaint should be set (``true`` or default ``false``)
+- ``notnull`` -> Force not null to be set
+- ``fkey`` -> The foreign key to set. Format is ``parent table name,column name``

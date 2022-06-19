@@ -1,6 +1,14 @@
 package main
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+)
 
 // Schemas here
 //
@@ -9,8 +17,8 @@ import "time"
 // Tool below
 
 type Auth struct {
-	ID    *string `bson:"id,omitempty" schema:"id,text not null"`
-	Token string  `bson:"token" schema:"token,text not null"`
+	ID    *string `bson:"id,omitempty" json:"id" notnull:"true"`
+	Token string  `bson:"token" json:"token" notnull:"true"`
 }
 
 type UUID = string
@@ -58,8 +66,8 @@ type Bot struct {
 	TotalUptime      int64     `bson:"total_uptime,omitempty" json:"total_uptime" default:"0"`
 	Claimed          bool      `bson:"claimed,omitempty" json:"claimed" default:"false"`
 	ClaimedBy        string    `bson:"claimedBy,omitempty" json:"claimed_by" default:"null"`
-	Note             string    `bson:"note,omitempty" json:"approval_note" default:"No note"`
-	Date             time.Time `bson:"date,omitempty" json:"date" mark:"timestamptz" schema:"date,timestamptz not null default NOW()"`
+	Note             string    `bson:"note,omitempty" json:"approval_note" default:"'No note'"`
+	Date             time.Time `bson:"date,omitempty" json:"date" default:"NOW()" notnull:"true"`
 	Webhook          *string   `bson:"webhook,omitempty" json:"webhook" default:"null"` // Discord
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"custom_webhook" default:"null"`
@@ -67,8 +75,91 @@ type Bot struct {
 	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()::text"`
 }
 
+type Claims struct {
+	BotID       string    `bson:"botID" json:"bot_id" mark:"text not null unique" fkey:"bots,bot_id"`
+	ClaimedBy   string    `bson:"claimedBy" json:"claimed_by"`
+	Claimed     bool      `bson:"claimed" json:"claimed"`
+	ClaimedAt   time.Time `bson:"claimedAt" json:"claimed_at" default:"NOW()"`
+	UnclaimedAt time.Time `bson:"unclaimedAt" json:"unclaimed_at" default:"NOW()"`
+}
+
+type User struct {
+	UserID        string         `bson:"userID" json:"user_id" mark:"text not null unique"`
+	Username      string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
+	Votes         map[string]any `bson:"votes" json:"votes" default:"{}"`
+	PackVotes     map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
+	Staff         bool           `bson:"staff" json:"staff" default:"false"`
+	Admin         bool           `bson:"admin" json:"admin" default:"false"`
+	Certified     bool           `bson:"certified" json:"certified" default:"false"`
+	Developer     bool           `bson:"developer" json:"developer" default:"false"`
+	Notifications bool           `bson:"notifications" json:"notifications" default:"false"`
+	Website       *string        `bson:"website,omitempty" json:"website" default:"null"`
+	Github        *string        `bson:"github,omitempty" json:"github" default:"null"`
+	Nickname      *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
+	APIToken      string         `bson:"apiToken" json:"api_token" default:"uuid_generate_v4()::text"`
+	About         *string        `bson:"about,omitempty" json:"about" default:"'I am a very mysterious person'"`
+	VoteBanned    bool           `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`
+	StaffStats    map[string]any `bson:"staff_stats" json:"staff_stats" default:"{}"`
+	NewStaffStats map[string]any `bson:"new_staff_stats" json:"new_staff_stats" default:"{}"`
+}
+
+type Announcements struct {
+	UserID string `bson:"userID" json:"user_id" mark:"text not null unique" fkey:"users,user_id"`
+}
+
+// Exported functions
+var exportedFuncs = map[string]*gfunc{
+	"getuser": {
+		param: "userID", // The parameter from mongo to accept
+		function: func(p any) any {
+			userId := p.(string)
+
+			// Call http://localhost:8080/_duser/ID
+			resp, err := http.Get("http://localhost:8080/_duser/" + userId)
+
+			if err != nil {
+				fmt.Println("User fetch error:", err)
+				return nil
+			}
+
+			if resp.StatusCode != 200 {
+				fmt.Println("User fetch error:", resp.StatusCode)
+				return nil
+			}
+
+			// Read the response body
+			body, err := ioutil.ReadAll(resp.Body)
+
+			if err != nil {
+				fmt.Println("User fetch error:", err)
+				return nil
+			}
+
+			var data struct {
+				Username string `json:"username"`
+			}
+
+			// Unmarshal the response body
+			err = json.Unmarshal(body, &data)
+
+			if err != nil {
+				fmt.Println("User fetch error:", err)
+				return nil
+			}
+
+			// Update mongodb with the username
+			client.Database("infinity").Collection("users").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"username": data.Username}})
+
+			return data.Username
+		},
+	},
+}
+
 // Place all schemas to be used in the tool here
 func backupSchemas() {
 	backupTool("oauths", Auth{})
 	backupTool("bots", Bot{})
+	backupTool("claims", Claims{})
+	backupTool("users", User{})
+	backupTool("announcements", Announcements{})
 }

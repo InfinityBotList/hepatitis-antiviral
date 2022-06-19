@@ -25,81 +25,88 @@ var (
 	backupList []string
 )
 
+type gfunc struct {
+	param    string
+	function func(p any) any
+}
+
 func getTag(field reflect.StructField) (json []string, bson []string) {
-	var tagSplit []string
-	if field.Tag.Get("schema") != "" {
-		tagSplit = strings.Split(field.Tag.Get("schema"), ",")
-	} else {
-		// Try fetching from bson and struct type instead
-		if field.Tag.Get("bson") != "" {
-			tagSplit = strings.Split(field.Tag.Get("bson"), ",")
-			jsonKeyName := strings.Split(field.Tag.Get("json"), ",")
+	tagSplit := strings.Split(field.Tag.Get("bson"), ",")
+	jsonKeyName := strings.Split(field.Tag.Get("json"), ",")
 
-			if len(jsonKeyName) < 1 {
-				panic("No json key name found for bson tag")
-			}
-
-			if jsonKeyName[0] == "-" {
-				jsonKeyName[0] = tagSplit[0]
-			}
-
-			if jsonKeyName[0] == "" || jsonKeyName[0] == "-" {
-				panic("No json key name found for bson tag")
-			}
-
-			var cond string
-
-			if len(tagSplit) == 1 {
-				// No omitempty, so we assume not null
-				cond = "not null"
-			}
-
-			fieldType := field.Type.Name()
-
-			if fieldType == "" {
-				// its a pointer, resolve it
-				fieldType = field.Type.Elem().Name()
-			}
-
-			// Handle string -> text
-			if fieldType == "string" {
-				fieldType = "text"
-			}
-
-			// Handle bool as boolean
-			if fieldType == "bool" {
-				fieldType = "boolean"
-			}
-
-			// Handle the other int types
-			if fieldType == "int" {
-				fieldType = "integer"
-			} else if fieldType == "int8" {
-				fieldType = "smallint"
-			} else if fieldType == "int16" {
-				fieldType = "smallint"
-			} else if fieldType == "int32" {
-				fieldType = "integer"
-			} else if fieldType == "int64" {
-				fieldType = "bigint"
-			}
-
-			if field.Type.Kind() == reflect.Slice || field.Tag.Get("tolist") == "true" {
-				fieldType += "[]"
-			}
-
-			if field.Tag.Get("mark") != "" {
-				fieldType = field.Tag.Get("mark")
-			}
-
-			fmt.Println(fieldType)
-
-			return []string{jsonKeyName[0], fieldType + " " + cond}, []string{tagSplit[0], fieldType + " " + cond}
-		} else {
-			panic("No tag found for field " + field.Name)
-		}
+	if len(tagSplit) == 0 {
+		panic("No tag found for " + field.Name)
 	}
-	return tagSplit, tagSplit
+
+	if len(jsonKeyName) < 1 {
+		panic("No json key name found for bson tag at field " + field.Name)
+	}
+
+	if jsonKeyName[0] == "-" {
+		jsonKeyName[0] = tagSplit[0]
+	}
+
+	if jsonKeyName[0] == "" || jsonKeyName[0] == "-" {
+		panic("No json key name found for bson tag at field " + field.Name)
+	}
+
+	var cond string
+
+	if len(tagSplit) == 1 || field.Tag.Get("notnull") == "true" {
+		// No omitempty, so we assume not null
+		cond = "not null"
+	}
+
+	fieldType := field.Type.Name()
+
+	if fieldType == "" {
+		// its a pointer, resolve it
+		fieldType = field.Type.Elem().Name()
+	}
+
+	// Handle string -> text
+	if fieldType == "string" {
+		fieldType = "text"
+	}
+
+	// Handle bool as boolean
+	if fieldType == "bool" {
+		fieldType = "boolean"
+	}
+
+	// Handle the other int types
+	if fieldType == "int" {
+		fieldType = "integer"
+	} else if fieldType == "int8" {
+		fieldType = "smallint"
+	} else if fieldType == "int16" {
+		fieldType = "smallint"
+	} else if fieldType == "int32" {
+		fieldType = "integer"
+	} else if fieldType == "int64" {
+		fieldType = "bigint"
+	}
+
+	// Time is timestamptz
+	if fieldType == "Time" {
+		fieldType = "timestamptz"
+	}
+
+	if field.Type.Kind() == reflect.Slice || field.Tag.Get("tolist") == "true" {
+		fieldType += "[]"
+	}
+
+	if field.Type.Kind() == reflect.Map {
+		fieldType = "jsonb" // All maps are assumed to be jsonb
+	}
+
+	if field.Tag.Get("mark") != "" {
+		fieldType = field.Tag.Get("mark")
+	}
+
+	fmt.Println(fieldType, cond)
+
+	return []string{jsonKeyName[0], fieldType + " " + cond}, []string{tagSplit[0], fieldType + " " + cond}
 }
 
 func resolveInput(input string) any {
@@ -110,6 +117,7 @@ func resolveInput(input string) any {
 	} else if input == "false" {
 		return false
 	}
+
 	return input
 }
 
@@ -123,10 +131,12 @@ func backupTool(schemaName string, schema any) {
 
 	cur, err := db.Collection(schemaName).Find(ctx, bson.M{})
 
+	if err != nil {
+		panic(err)
+	}
+
 	fmt.Println("Backing up " + schemaName)
 
-	// Create new table
-	pool.Exec(ctx, "DROP TABLE "+schemaName)
 	_, pgerr := pool.Exec(ctx, "CREATE TABLE "+schemaName+" (itag UUID PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4())")
 
 	if err != nil {
@@ -143,12 +153,47 @@ func backupTool(schemaName string, schema any) {
 		tag, _ := getTag(field) // We want json tag here as it has what we need
 		fmt.Println("Got tag of", tag, "for field ", field.Name)
 
+		var (
+			defaultVal = ""
+			uniqueVal  = ""
+		)
+
+		if field.Tag.Get("unique") == "true" {
+			uniqueVal = "UNIQUE"
+		}
+
+		if field.Tag.Get("default") != "" {
+			defaultVal = field.Tag.Get("default")
+
+			if strings.HasPrefix(defaultVal, "{}") {
+				defaultVal = "'" + defaultVal + "'"
+			}
+
+			defaultVal = " DEFAULT " + defaultVal
+		}
+
 		// Create column
-		_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD COLUMN "+tag[0]+" "+strings.Join(tag[1:], " "))
+		_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD COLUMN "+tag[0]+" "+strings.Join(tag[1:], " ")+uniqueVal+defaultVal)
 		if err != nil {
 			panic(err)
 		}
+
+		// Check for fkey, if so add it
+		if field.Tag.Get("fkey") != "" {
+			// Format for fkey is REFER_TABLE_NAME,COLUMN_NAME
+			fkeySplit := strings.Split(field.Tag.Get("fkey"), ",")
+			fkeyRefersParentTable := fkeySplit[0]
+			fkeyRefersParentColumn := fkeySplit[1]
+
+			_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD CONSTRAINT "+tag[0]+"_fkey FOREIGN KEY ("+tag[0]+") REFERENCES "+fkeyRefersParentTable+"("+fkeyRefersParentColumn+")")
+
+			if err != nil {
+				panic(err)
+			}
+		}
 	}
+
+	var i int
 
 	for cur.Next(ctx) {
 		var result bson.M
@@ -182,6 +227,17 @@ func backupTool(schemaName string, schema any) {
 			res = result[btag[0]]
 
 			if res == nil {
+				if field.Tag.Get("defaultfunc") != "" {
+					fn := exportedFuncs[field.Tag.Get("defaultfunc")]
+					if fn == nil {
+						panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
+					}
+					res = fn.function(result[fn.param])
+				}
+			}
+
+			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
+			if res == nil {
 				if field.Tag.Get("default") != "" {
 					res = resolveInput(field.Tag.Get("default"))
 				} else {
@@ -210,7 +266,7 @@ func backupTool(schemaName string, schema any) {
 			}
 
 			// Handle mark of timestamptz
-			if field.Tag.Get("mark") == "timestamptz" {
+			if strings.HasPrefix(tag[1], "time") {
 				// check if res is int64
 				fmt.Println("Converting a", reflect.TypeOf(res), "to time.Time")
 				if resCast, ok := res.(int64); ok {
@@ -242,6 +298,10 @@ func backupTool(schemaName string, schema any) {
 		if pgerr != nil {
 			panic(pgerr)
 		}
+
+		i++
+
+		fmt.Println("At", i, "rows")
 	}
 }
 
@@ -278,6 +338,15 @@ func main() {
 
 	if err != nil {
 		panic(err)
+	}
+
+	if len(backupList) == 0 {
+		pool.Exec(ctx, `DROP SCHEMA public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+COMMENT ON SCHEMA public IS 'standard public schema'`)
+		pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
 	}
 
 	backupSchemas()

@@ -216,7 +216,7 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			fkeyRefersParentTable := fkeySplit[0]
 			fkeyRefersParentColumn := fkeySplit[1]
 
-			_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD CONSTRAINT "+tag[0]+"_fkey FOREIGN KEY ("+tag[0]+") REFERENCES "+fkeyRefersParentTable+"("+fkeyRefersParentColumn+")")
+			_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD CONSTRAINT "+tag[0]+"_fkey FOREIGN KEY ("+tag[0]+") REFERENCES "+fkeyRefersParentTable+"("+fkeyRefersParentColumn+") ON DELETE CASCADE ON UPDATE CASCADE")
 
 			if err != nil {
 				panic(err)

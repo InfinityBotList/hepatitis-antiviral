@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -28,7 +27,7 @@ type Bot struct {
 	Name             string    `bson:"botName" json:"name"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
-	Owner            string    `bson:"main_owner" json:"owner" log:"1"`
+	Owner            string    `bson:"main_owner" json:"owner"`
 	AdditionalOwners []string  `bson:"additional_owners" json:"additional_owners"`
 	StaffBot         bool      `bson:"staff" json:"staff_bot" default:"false"`
 	Short            string    `bson:"short" json:"short"`
@@ -104,7 +103,15 @@ type User struct {
 }
 
 type Announcements struct {
-	UserID string `bson:"userID" json:"user_id" unique:"true" fkey:"users,user_id"`
+	UserID         string    `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	AnnouncementID string    `bson:"announceID" json:"id" mark:"uuid" default:"uuid_generate_v4()" omit:"true"`
+	Title          string    `bson:"title" json:"title"`
+	Content        string    `bson:"content" json:"content"`
+	ModifiedDate   time.Time `bson:"modifiedDate" json:"modified_date" default:"NOW()"`
+	ExpiresDate    time.Time `bson:"expiresDate,omitempty" json:"expires_date" default:"NOW()"`
+	Status         string    `bson:"status" json:"status" default:"'active'"`
+	Targetted      bool      `bson:"targetted" json:"targetted" default:"false"`
+	Target         []string  `bson:"target,omitempty" json:"target" default:"null"`
 }
 
 // Exported functions
@@ -157,9 +164,19 @@ var exportedFuncs = map[string]*gfunc{
 
 // Place all schemas to be used in the tool here
 func backupSchemas() {
-	backupTool("oauths", Auth{})
-	backupTool("bots", Bot{})
-	backupTool("claims", Claims{})
-	backupTool("users", User{})
-	backupTool("announcements", Announcements{})
+	backupTool("oauths", Auth{}, backupOpts{
+		Concurrent: false,
+	})
+	backupTool("bots", Bot{}, backupOpts{
+		Concurrent: false,
+	})
+	backupTool("claims", Claims{}, backupOpts{
+		Concurrent: false,
+	})
+	backupTool("users", User{}, backupOpts{
+		Concurrent: false,
+	})
+	backupTool("announcements", Announcements{}, backupOpts{
+		Concurrent: false,
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"golang.org/x/exp/slices"
@@ -21,8 +23,9 @@ var (
 	ctx        = context.Background()
 	pool       *pgxpool.Pool
 	client     *mongo.Client
-	err        error
 	backupList []string
+	tagCache   map[string][2][]string = make(map[string][2][]string)
+	debug      bool
 )
 
 type gfunc struct {
@@ -30,7 +33,16 @@ type gfunc struct {
 	function func(p any) any
 }
 
+type backupOpts struct {
+	// Can be slow
+	Concurrent bool
+}
+
 func getTag(field reflect.StructField) (json []string, bson []string) {
+	if v, ok := tagCache[field.Name]; ok {
+		return v[0], v[1]
+	}
+
 	tagSplit := strings.Split(field.Tag.Get("bson"), ",")
 	jsonKeyName := strings.Split(field.Tag.Get("json"), ",")
 
@@ -104,7 +116,7 @@ func getTag(field reflect.StructField) (json []string, bson []string) {
 		fieldType = field.Tag.Get("mark")
 	}
 
-	fmt.Println(fieldType, cond)
+	tagCache[field.Name] = [2][]string{{jsonKeyName[0], fieldType + " " + cond}, {tagSplit[0], fieldType + " " + cond}}
 
 	return []string{jsonKeyName[0], fieldType + " " + cond}, []string{tagSplit[0], fieldType + " " + cond}
 }
@@ -121,7 +133,9 @@ func resolveInput(input string) any {
 	return input
 }
 
-func backupTool(schemaName string, schema any) {
+func backupTool(schemaName string, schema any, opts backupOpts) {
+	tagCache = make(map[string][2][]string)
+
 	if len(backupList) != 0 && !slices.Contains(backupList, schemaName) {
 		fmt.Println("Skipping backup of", schemaName)
 		return
@@ -131,11 +145,26 @@ func backupTool(schemaName string, schema any) {
 
 	cur, err := db.Collection(schemaName).Find(ctx, bson.M{})
 
+	count, cerr := db.Collection(schemaName).CountDocuments(ctx, bson.M{})
+
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println("Backing up " + schemaName)
+	if cerr != nil {
+		panic(cerr)
+	}
+
+	notifyMsg("info", "Backing up "+schemaName)
+
+	if len(backupList) != 0 {
+		// Try deleting but ignore if delete fails
+		_, err = pool.Exec(ctx, "DROP TABLE "+schemaName)
+
+		if err != nil {
+			notifyMsg("error", "Failed to drop table "+schemaName+": "+err.Error())
+		}
+	}
 
 	_, pgerr := pool.Exec(ctx, "CREATE TABLE "+schemaName+" (itag UUID PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4())")
 
@@ -151,7 +180,7 @@ func backupTool(schemaName string, schema any) {
 
 	for _, field := range reflect.VisibleFields(structType) {
 		tag, _ := getTag(field) // We want json tag here as it has what we need
-		fmt.Println("Got tag of", tag, "for field ", field.Name)
+		notifyMsg("debug", fmt.Sprintln("Got tag of", tag, "for field ", field.Name))
 
 		var (
 			defaultVal = ""
@@ -159,7 +188,7 @@ func backupTool(schemaName string, schema any) {
 		)
 
 		if field.Tag.Get("unique") == "true" {
-			fmt.Println("Field", field.Name, "is unique")
+			notifyMsg("debug", fmt.Sprintln("Field", field.Name, "is unique"))
 			uniqueVal = " UNIQUE "
 		}
 
@@ -197,6 +226,8 @@ func backupTool(schemaName string, schema any) {
 	var i int
 
 	for cur.Next(ctx) {
+		sendProgress(i, int(count), schemaName)
+
 		var result bson.M
 
 		err := cur.Decode(&result)
@@ -204,112 +235,188 @@ func backupTool(schemaName string, schema any) {
 			panic(err)
 		}
 
-		var sqlStr string = "INSERT INTO " + schemaName + " ("
+		act := func(result bson.M) {
+			var sqlStr string = "INSERT INTO " + schemaName + " ("
 
-		for _, field := range reflect.VisibleFields(structType) {
-			tag, _ := getTag(field) // Json tag here again
-			fmt.Println("Got tag of", tag, "for field ", field.Name)
-
-			sqlStr += tag[0] + ","
-		}
-
-		sqlStr = sqlStr[:len(sqlStr)-1] + ") VALUES ("
-
-		args := make([]any, 0)
-
-		argNums := []string{}
-
-		for i, field := range reflect.VisibleFields(structType) {
-			tag, btag := getTag(field) // Here we need both
-			fmt.Println("Got tag of", tag, "for field", field.Name, "with btag of", btag)
-
-			var res any
-
-			res = result[btag[0]]
-
-			if res == nil {
-				if field.Tag.Get("defaultfunc") != "" {
-					fn := exportedFuncs[field.Tag.Get("defaultfunc")]
-					if fn == nil {
-						panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
-					}
-					res = fn.function(result[fn.param])
+			for _, field := range reflect.VisibleFields(structType) {
+				if field.Tag.Get("omit") == "true" {
+					continue
 				}
+				tag, _ := getTag(field) // Json tag here again
+
+				sqlStr += tag[0] + ","
 			}
 
-			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
-			if res == nil {
-				if field.Tag.Get("default") != "" {
-					res = resolveInput(field.Tag.Get("default"))
-				} else {
-					// Ask user what to do
-					var flag bool = true
-					for flag {
-						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? ")
-						var input string
-						fmt.Scanln(&input)
-						res = resolveInput(input)
+			sqlStr = sqlStr[:len(sqlStr)-1] + ") VALUES ("
 
-						if input != "" {
-							fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
-							var confirm string
-							fmt.Scanln(&confirm)
-							if confirm == "y" {
-								flag = false
+			args := make([]any, 0)
+
+			argNums := []string{}
+
+			var i int
+
+			for _, field := range reflect.VisibleFields(structType) {
+				if field.Tag.Get("omit") == "true" {
+					continue
+				}
+
+				tag, btag := getTag(field) // Here we need both
+				if debug {
+					notifyMsg("debug", "Table:"+schemaName+"\nField:"+field.Name+"\nType:"+tag[1]+"\n")
+				}
+
+				var res any
+
+				res = result[btag[0]]
+
+				if res == nil {
+					if field.Tag.Get("defaultfunc") != "" {
+						fn := exportedFuncs[field.Tag.Get("defaultfunc")]
+						if fn == nil {
+							panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
+						}
+						res = fn.function(result[fn.param])
+					}
+				}
+
+				// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
+				if res == nil {
+					if field.Tag.Get("default") != "" {
+						res = resolveInput(field.Tag.Get("default"))
+					} else {
+						// Ask user what to do
+						var flag bool = true
+						for flag {
+							fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? ")
+							var input string
+							fmt.Scanln(&input)
+							res = resolveInput(input)
+
+							if input != "" {
+								fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
+								var confirm string
+								fmt.Scanln(&confirm)
+								if confirm == "y" {
+									flag = false
+								}
 							}
 						}
 					}
 				}
-			}
 
-			if field.Tag.Get("log") == "1" {
-				fmt.Println("Setting", btag[0], "(", tag[0], ") to", res)
-			}
-
-			// Handle mark of timestamptz
-			if strings.HasPrefix(tag[1], "time") {
-				// check if res is int64
-				fmt.Println("Converting a", reflect.TypeOf(res), "to time.Time")
-				if resCast, ok := res.(int64); ok {
-					res = time.UnixMilli(resCast)
-				} else if resCast, ok := res.(float64); ok {
-					res = time.UnixMilli(int64(resCast))
+				if field.Tag.Get("log") == "1" {
+					fmt.Println("Setting", btag[0], "(", tag[0], ") to", res)
 				}
-			}
 
-			// Handle tolist
-			if field.Tag.Get("tolist") == "true" {
-				if resCast, ok := res.(string); ok {
-					res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
-					fmt.Println("Converting", resCast, "to", res)
+				// Handle mark of timestamptz
+				if strings.HasPrefix(tag[1], "time") {
+					// check if res is int64
+					if debug {
+						notifyMsg("debug", "Converting a "+reflect.TypeOf(res).Name()+" to time.Time")
+					}
+
+					if resCast, ok := res.(int64); ok {
+						res = time.UnixMilli(resCast)
+					} else if resCast, ok := res.(float64); ok {
+						res = time.UnixMilli(int64(resCast))
+					} else if resCast, ok := res.(string); ok {
+						// Cast string to int64
+						resD, err := strconv.ParseInt(resCast, 10, 64)
+						if err != nil {
+							// Could be a datetime string
+							resDV, err := time.Parse(time.RFC3339, resCast)
+							if err != nil {
+								// Last ditch effort, try checking if its NOW or something
+								if strings.Contains(resCast, "NOW") {
+									res = time.Now()
+								} else {
+									panic(err)
+								}
+							} else {
+								res = resDV
+							}
+						} else {
+							res = time.UnixMilli(resD)
+						}
+					} else if resCast, ok := res.(primitive.DateTime); ok {
+						res = time.UnixMilli(resCast.Time().UnixMilli())
+					} else if resCast, ok := res.(primitive.A); ok {
+						// For each int64 in the array, convert to time.Time
+						resV := make([]time.Time, len(resCast))
+						for i, v := range resCast {
+							if val, ok := v.(int64); ok {
+								resV[i] = time.UnixMilli(val)
+							} else if val, ok := v.(float64); ok {
+								resV[i] = time.UnixMilli(int64(val))
+							}
+						}
+						res = resV
+					}
 				}
+
+				// Handle tolist
+				if field.Tag.Get("tolist") == "true" {
+					if resCast, ok := res.(string); ok {
+						res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
+
+						if debug {
+							notifyMsg("debug", "Converting "+resCast+" to list")
+						}
+					}
+				}
+
+				args = append(args, res)
+
+				argNums = append(argNums, "$"+strconv.Itoa(i+1))
+
+				i++
 			}
 
-			args = append(args, res)
+			sqlStr += strings.Join(argNums, ",") + ")"
 
-			argNums = append(argNums, "$"+strconv.Itoa(i+1))
+			if debug {
+				notifyMsg("debug", "SQL String: "+sqlStr)
+			}
+
+			_, pgerr = pool.Exec(ctx, sqlStr, args...)
+
+			if pgerr != nil {
+				panic(pgerr)
+			}
 		}
 
-		sqlStr += strings.Join(argNums, ",") + ")"
-
-		fmt.Println("SQL String:", sqlStr)
-
-		_, pgerr = pool.Exec(ctx, sqlStr, args...)
-
-		if pgerr != nil {
-			panic(pgerr)
+		if opts.Concurrent {
+			go act(result)
+		} else {
+			act(result)
 		}
 
 		i++
-
-		fmt.Println("At", i, "rows")
 	}
 }
 
 func main() {
 	backupCols := flag.String("backup", "", "Which collections to backup. Default is all")
+	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 
 	flag.Parse()
+
+	// Check if daemon is running regardless of whether we are backing up a specific schema
+	req, err := http.NewRequest("GET", "http://localhost:3939", nil)
+
+	if err != nil {
+		panic(err)
+	}
+
+	res, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if res.StatusCode != 200 {
+		panic("Daemon is not running")
+	}
 
 	if *backupCols == "" {
 		backupList = []string{}
@@ -320,6 +427,8 @@ func main() {
 	if len(backupList) == 0 {
 		fmt.Println("No collections specified, backing up all")
 	}
+
+	sendRoutine()
 
 	// Create mongodb conn
 	client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017/infinity"))
@@ -335,7 +444,7 @@ func main() {
 		panic(err)
 	}
 
-	_, err := pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
+	_, err = pool.Exec(ctx, "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"")
 
 	if err != nil {
 		panic(err)

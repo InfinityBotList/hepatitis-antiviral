@@ -20,3 +20,8 @@ These extra options are placed in struct tags in your schema
 - ``unique`` -> Whether or not a unique constaint should be set (``true`` or default ``false``)
 - ``notnull`` -> Force not null to be set
 - ``fkey`` -> The foreign key to set. Format is ``parent table name,column name``
+- ``omitfield`` -> Whether or not to omit this field, a default value will be used in this case
+
+### Daemon
+
+For the purposes of logging and asking for user input while migrating, a foreground ``daemon`` is required/used. The daemon is written in python

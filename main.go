@@ -35,7 +35,8 @@ type gfunc struct {
 
 type backupOpts struct {
 	// Can be slow
-	Concurrent bool
+	Concurrent    bool
+	IgnoreFKError bool
 }
 
 func getTag(field reflect.StructField) (json []string, bson []string) {
@@ -381,6 +382,9 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			_, pgerr = pool.Exec(ctx, sqlStr, args...)
 
 			if pgerr != nil {
+				if opts.IgnoreFKError && strings.Contains(pgerr.Error(), "violates foreign key") {
+					return
+				}
 				panic(pgerr)
 			}
 		}

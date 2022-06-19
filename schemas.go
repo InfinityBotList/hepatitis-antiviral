@@ -114,6 +114,23 @@ type Announcements struct {
 	Target         []string  `bson:"target,omitempty" json:"target" default:"null"`
 }
 
+type Votes struct {
+	UserID string    `bson:"userID" json:"user_id" fkey:"users,user_id" fkignore:"true"`
+	BotID  string    `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	Date   time.Time `bson:"date" json:"date" default:"NOW()"`
+}
+
+type Packs struct {
+	Owner   string    `bson:"owner" json:"owner" fkey:"users,user_id"`
+	Name    string    `bson:"name" json:"name" default:"'My pack'"`
+	Short   string    `bson:"short" json:"short"`
+	Votes   int64     `bson:"votes" json:"votes"`
+	TagsRaw string    `bson:"tags" json:"tags" tolist:"true"`
+	URL     string    `bson:"url" json:"url"`
+	Date    time.Time `bson:"date" json:"date" default:"NOW()"`
+	Bots    []string  `bson:"bots" json:"bots" tolist:"true"`
+}
+
 // Exported functions
 var exportedFuncs = map[string]*gfunc{
 	"getuser": {
@@ -179,4 +196,14 @@ func backupSchemas() {
 	backupTool("announcements", Announcements{}, backupOpts{
 		Concurrent: false,
 	})
+	backupTool("votes", Votes{}, backupOpts{
+		Concurrent:    false,
+		IgnoreFKError: true,
+	})
+	backupTool("packs", Packs{}, backupOpts{
+		Concurrent:    false,
+		IgnoreFKError: true,
+	})
 }
+
+// Remaining: reviews, tickets (maybe), transcripts (maybe)

@@ -24,7 +24,7 @@ type Auth struct {
 type UUID = string
 
 type Bot struct {
-	BotID            string    `bson:"botID" json:"bot_id" mark:"text not null unique"`
+	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
 	Name             string    `bson:"botName" json:"name"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
@@ -76,7 +76,7 @@ type Bot struct {
 }
 
 type Claims struct {
-	BotID       string    `bson:"botID" json:"bot_id" mark:"text not null unique" fkey:"bots,bot_id"`
+	BotID       string    `bson:"botID" json:"bot_id" unique:"true" fkey:"bots,bot_id"`
 	ClaimedBy   string    `bson:"claimedBy" json:"claimed_by"`
 	Claimed     bool      `bson:"claimed" json:"claimed"`
 	ClaimedAt   time.Time `bson:"claimedAt" json:"claimed_at" default:"NOW()"`
@@ -84,7 +84,7 @@ type Claims struct {
 }
 
 type User struct {
-	UserID        string         `bson:"userID" json:"user_id" mark:"text not null unique"`
+	UserID        string         `bson:"userID" json:"user_id" unique:"true"`
 	Username      string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
 	Votes         map[string]any `bson:"votes" json:"votes" default:"{}"`
 	PackVotes     map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
@@ -104,7 +104,7 @@ type User struct {
 }
 
 type Announcements struct {
-	UserID string `bson:"userID" json:"user_id" mark:"text not null unique" fkey:"users,user_id"`
+	UserID string `bson:"userID" json:"user_id" unique:"true" fkey:"users,user_id"`
 }
 
 // Exported functions

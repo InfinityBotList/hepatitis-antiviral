@@ -159,7 +159,8 @@ func backupTool(schemaName string, schema any) {
 		)
 
 		if field.Tag.Get("unique") == "true" {
-			uniqueVal = "UNIQUE"
+			fmt.Println("Field", field.Name, "is unique")
+			uniqueVal = " UNIQUE "
 		}
 
 		if field.Tag.Get("default") != "" {

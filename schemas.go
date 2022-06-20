@@ -3,9 +3,12 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"time"
+	"unsafe"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -54,7 +57,7 @@ type Bot struct {
 	Vanity           *string   `bson:"vanity,omitempty" json:"vanity" default:"null"`
 	ExternalSource   string    `bson:"external_source,omitempty" json:"external_source" default:"null"`
 	ListSource       string    `bson:"listSource,omitempty" json:"list_source" mark:"uuid" default:"null"`
-	VoteBanned       bool      `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`
+	VoteBanned       bool      `bson:"vote_banned,omitempty" json:"vote_banned" default:"false" notnull:"true"`
 	CrossAdd         bool      `bson:"cross_add,omitempty" json:"cross_add" default:"true"`
 	StartPeriod      int64     `bson:"start_period,omitempty" json:"start_premium_period" default:"0"`
 	SubPeriod        int64     `bson:"sub_period,omitempty" json:"premium_period_length" default:"0"`
@@ -70,8 +73,8 @@ type Bot struct {
 	Webhook          *string   `bson:"webhook,omitempty" json:"webhook" default:"null"` // Discord
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"custom_webhook" default:"null"`
-	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}"`
-	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()::text"`
+	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
+	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`
 }
 
 type Claims struct {
@@ -95,7 +98,7 @@ type User struct {
 	Website       *string        `bson:"website,omitempty" json:"website" default:"null"`
 	Github        *string        `bson:"github,omitempty" json:"github" default:"null"`
 	Nickname      *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
-	APIToken      string         `bson:"apiToken" json:"api_token" default:"uuid_generate_v4()::text"`
+	APIToken      string         `bson:"apiToken" json:"api_token" defaultfunc:"gentoken"`
 	About         *string        `bson:"about,omitempty" json:"about" default:"'I am a very mysterious person'"`
 	VoteBanned    bool           `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`
 	StaffStats    map[string]any `bson:"staff_stats" json:"staff_stats" default:"{}"`
@@ -104,7 +107,7 @@ type User struct {
 
 type Announcements struct {
 	UserID         string    `bson:"userID" json:"user_id" fkey:"users,user_id"`
-	AnnouncementID string    `bson:"announceID" json:"id" mark:"uuid" default:"uuid_generate_v4()" omit:"true"`
+	AnnouncementID string    `bson:"announceID" json:"id" mark:"uuid" defaultfunc:"uuidgen" default:"uuid_generate_v4()" omit:"true"`
 	Title          string    `bson:"title" json:"title"`
 	Content        string    `bson:"content" json:"content"`
 	ModifiedDate   time.Time `bson:"modifiedDate" json:"modified_date" default:"NOW()"`
@@ -149,9 +152,9 @@ type Tickets struct {
 	ChannelID      string    `bson:"channelID" json:"channel_id"`
 	Topic          string    `bson:"topic" json:"topic" default:"'Support'"`
 	UserID         string    `bson:"userID" json:"user_id"` // No fkey here bc a user may not be a user on the table yet
-	TicketID       string    `bson:"ticketID" json:"id" mark:"serial" unique:"true"`
-	LogURL         string    `bson:"logURL" json:"log_url"`
-	CloseUserID    string    `bson:"closeUserID" json:"close_user_id"`
+	TicketID       int       `bson:"ticketID" json:"id" unique:"true"`
+	LogURL         string    `bson:"logURL,omitempty" json:"log_url" default:"null"`
+	CloseUserID    string    `bson:"closeUserID,omitempty" json:"close_user_id" default:"null"`
 	Open           bool      `bson:"open" json:"open" default:"true"`
 	Date           time.Time `bson:"date" json:"date" default:"NOW()"`
 	PanelMessageID string    `bson:"panelMessageID,omitempty" json:"panel_message_id" default:"null"`
@@ -159,14 +162,53 @@ type Tickets struct {
 }
 
 type Transcripts struct {
-	TicketID string         `bson:"ticketID" json:"id" mark:"serial" fkey:"tickets,id"`
+	TicketID int            `bson:"ticketID" json:"id" fkey:"tickets,id"`
 	Data     map[string]any `bson:"data" json:"data" default:"{}"`
 	ClosedBy map[string]any `bson:"closedBy" json:"closed_by" default:"{}"`
 	OpenedBy map[string]any `bson:"openedBy" json:"opened_by" default:"{}"`
 }
 
 // Exported functions
+const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
 var exportedFuncs = map[string]*gfunc{
+	"uuidgen": {
+		param: "userID",
+		function: func(p any) any {
+			uuid := uuid.New()
+			return uuid.String()
+		},
+	},
+	"gentoken": {
+		param: "userID",
+		function: func(p any) any {
+			// https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
+			const n = 128
+
+			var src = rand.NewSource(time.Now().UnixNano())
+
+			b := make([]byte, n)
+			// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
+			for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+				if remain == 0 {
+					cache, remain = src.Int63(), letterIdxMax
+				}
+				if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+					b[i] = letterBytes[idx]
+					i--
+				}
+				cache >>= letterIdxBits
+				remain--
+			}
+
+			return *(*string)(unsafe.Pointer(&b))
+		},
+	},
 	"getuser": {
 		param: "userID", // The parameter from mongo to accept
 		function: func(p any) any {
@@ -213,42 +255,36 @@ var exportedFuncs = map[string]*gfunc{
 	},
 }
 
+// Place all schema options here
+func getOpts() schemaOpts {
+	return schemaOpts{
+		TableName: "infinity",
+	}
+}
+
 // Place all schemas to be used in the tool here
 func backupSchemas() {
-	backupTool("oauths", Auth{}, backupOpts{
-		Concurrent: false,
-	})
-	backupTool("bots", Bot{}, backupOpts{
-		Concurrent: false,
-	})
+	backupTool("oauths", Auth{}, backupOpts{})
+	backupTool("bots", Bot{}, backupOpts{})
 	backupTool("claims", Claims{}, backupOpts{
-		Concurrent: false,
+		RenameTo: "reports",
 	})
-	backupTool("users", User{}, backupOpts{
-		Concurrent: false,
-	})
-	backupTool("announcements", Announcements{}, backupOpts{
-		Concurrent: false,
-	})
+	backupTool("users", User{}, backupOpts{})
+	backupTool("announcements", Announcements{}, backupOpts{})
 	backupTool("votes", Votes{}, backupOpts{
-		Concurrent:    false,
 		IgnoreFKError: true,
 	})
 	backupTool("packs", Packs{}, backupOpts{
-		Concurrent:    false,
 		IgnoreFKError: true,
 	})
 	backupTool("reviews", Reviews{}, backupOpts{
-		Concurrent:    false,
 		IgnoreFKError: true,
 	})
 	backupTool("tickets", Tickets{}, backupOpts{
-		Concurrent:    false,
 		IgnoreFKError: true,
 	})
 
 	backupTool("transcripts", Transcripts{}, backupOpts{
-		Concurrent:    false,
 		IgnoreFKError: true,
 	})
 }

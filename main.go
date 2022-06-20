@@ -34,9 +34,12 @@ type gfunc struct {
 }
 
 type backupOpts struct {
-	// Can be slow
-	Concurrent    bool
 	IgnoreFKError bool
+	RenameTo      string
+}
+
+type schemaOpts struct {
+	TableName string
 }
 
 func getTag(field reflect.StructField) (json []string, bson []string) {
@@ -200,6 +203,10 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 				defaultVal = "'" + defaultVal + "'"
 			}
 
+			if strings.Contains(defaultVal, "uuid_generate_v4()") {
+				defaultVal = "uuid_generate_v4()"
+			}
+
 			defaultVal = " DEFAULT " + defaultVal
 		}
 
@@ -259,6 +266,8 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 
 		var i int
 
+		var skipped bool
+
 		for _, field := range reflect.VisibleFields(structType) {
 			if field.Tag.Get("omit") == "true" {
 				continue
@@ -272,6 +281,10 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			var res any
 
 			res = result[btag[0]]
+
+			if res == "" {
+				res = nil
+			}
 
 			if res == nil {
 				if field.Tag.Get("defaultfunc") != "" {
@@ -297,9 +310,16 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 					// Ask user what to do
 					var flag bool = true
 					for flag {
-						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? ")
+						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? SKIP to skip this field, or enter a value:")
 						var input string
 						fmt.Scanln(&input)
+
+						if input == "SKIP" {
+							flag = false
+							skipped = true
+							continue
+						}
+
 						res = resolveInput(input)
 
 						if input != "" {
@@ -312,6 +332,10 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 						}
 					}
 				}
+			}
+
+			if skipped {
+				break
 			}
 
 			if field.Tag.Get("log") == "1" {
@@ -382,6 +406,10 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			i++
 		}
 
+		if skipped {
+			continue
+		}
+
 		sqlStr += strings.Join(argNums, ",") + ")"
 
 		if debug {
@@ -395,6 +423,16 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 				notifyMsg("warning", "Ignoring foreign key error on iter "+strconv.Itoa(counter)+": "+pgerr.Error())
 				continue
 			}
+			panic(pgerr)
+		}
+	}
+
+	if opts.RenameTo != "" {
+		// Rename postgres table
+		sqlStr := "ALTER TABLE " + schemaName + " RENAME TO " + opts.RenameTo
+		_, pgerr = pool.Exec(ctx, sqlStr)
+
+		if pgerr != nil {
 			panic(pgerr)
 		}
 	}
@@ -444,8 +482,10 @@ func main() {
 		panic(err)
 	}
 
+	schemaOpts := getOpts()
+
 	// Create postgres conn
-	pool, err = pgxpool.Connect(ctx, "postgresql://127.0.0.1:5432/merged?user=root&password=iblpublic")
+	pool, err = pgxpool.Connect(ctx, "postgresql://127.0.0.1:5432/"+schemaOpts.TableName+"?user=root&password=iblpublic")
 
 	if err != nil {
 		panic(err)

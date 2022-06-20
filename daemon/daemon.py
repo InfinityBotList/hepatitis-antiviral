@@ -74,7 +74,7 @@ async def notify(notify: Notify):
     return {}
 
 @app.post("/progress")
-async def progressbar_(p: Progress):
+def progressbar_(p: Progress):
     bar: tqdm.tqdm = app.state.pbar
 
     # Close old bar
@@ -84,6 +84,14 @@ async def progressbar_(p: Progress):
 
     app.state.done = p.done
     app.state.total = p.total
+
+@app.post("/done")
+async def done(p: Progress):
+    bar: tqdm.tqdm = app.state.pbar
+
+    bar.desc = p.col+" (done)"
+
+    print("\033[1;34m" + "Done backing up " + p.col + "\033[0m")
 
 @app.on_event("startup")
 async def startup():

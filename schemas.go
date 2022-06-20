@@ -149,13 +149,20 @@ type Tickets struct {
 	ChannelID      string    `bson:"channelID" json:"channel_id"`
 	Topic          string    `bson:"topic" json:"topic" default:"'Support'"`
 	UserID         string    `bson:"userID" json:"user_id"` // No fkey here bc a user may not be a user on the table yet
-	TicketID       string    `bson:"ticketID" json:"id" mark:"serial"`
+	TicketID       string    `bson:"ticketID" json:"id" mark:"serial" unique:"true"`
 	LogURL         string    `bson:"logURL" json:"log_url"`
 	CloseUserID    string    `bson:"closeUserID" json:"close_user_id"`
 	Open           bool      `bson:"open" json:"open" default:"true"`
 	Date           time.Time `bson:"date" json:"date" default:"NOW()"`
 	PanelMessageID string    `bson:"panelMessageID,omitempty" json:"panel_message_id" default:"null"`
 	PanelChannelID string    `bson:"panelChannelID,omitempty" json:"panel_channel_id" default:"null"`
+}
+
+type Transcripts struct {
+	TicketID string         `bson:"ticketID" json:"id" mark:"serial" fkey:"tickets,id"`
+	Data     map[string]any `bson:"data" json:"data" default:"{}"`
+	ClosedBy map[string]any `bson:"closedBy" json:"closed_by" default:"{}"`
+	OpenedBy map[string]any `bson:"openedBy" json:"opened_by" default:"{}"`
 }
 
 // Exported functions
@@ -236,6 +243,11 @@ func backupSchemas() {
 		IgnoreFKError: true,
 	})
 	backupTool("tickets", Tickets{}, backupOpts{
+		Concurrent:    false,
+		IgnoreFKError: true,
+	})
+
+	backupTool("transcripts", Transcripts{}, backupOpts{
 		Concurrent:    false,
 		IgnoreFKError: true,
 	})

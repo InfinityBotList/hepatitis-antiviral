@@ -62,3 +62,15 @@ func sendProgress(done int, total int, col string) {
 		},
 	}
 }
+
+func notifyDone(done int, total int, col string) {
+	// Send message to daemon
+	sendRoutineChan <- daemonMsg{
+		URL: "/done",
+		Body: map[string]any{
+			"done":  done,
+			"total": total,
+			"col":   col,
+		},
+	}
+}

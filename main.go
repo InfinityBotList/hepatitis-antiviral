@@ -224,10 +224,14 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 		}
 	}
 
-	var i int
+	var counter int
+
+	sendProgress(0, int(count), schemaName)
 
 	for cur.Next(ctx) {
-		sendProgress(i, int(count), schemaName)
+		counter++
+
+		sendProgress(counter, int(count), schemaName)
 
 		var result bson.M
 
@@ -236,167 +240,166 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			panic(err)
 		}
 
-		act := func(result bson.M) {
-			var sqlStr string = "INSERT INTO " + schemaName + " ("
+		var sqlStr string = "INSERT INTO " + schemaName + " ("
 
-			for _, field := range reflect.VisibleFields(structType) {
-				if field.Tag.Get("omit") == "true" {
-					continue
-				}
-				tag, _ := getTag(field) // Json tag here again
+		for _, field := range reflect.VisibleFields(structType) {
+			if field.Tag.Get("omit") == "true" {
+				continue
+			}
+			tag, _ := getTag(field) // Json tag here again
 
-				sqlStr += tag[0] + ","
+			sqlStr += tag[0] + ","
+		}
+
+		sqlStr = sqlStr[:len(sqlStr)-1] + ") VALUES ("
+
+		args := make([]any, 0)
+
+		argNums := []string{}
+
+		var i int
+
+		for _, field := range reflect.VisibleFields(structType) {
+			if field.Tag.Get("omit") == "true" {
+				continue
 			}
 
-			sqlStr = sqlStr[:len(sqlStr)-1] + ") VALUES ("
+			tag, btag := getTag(field) // Here we need both
+			if debug {
+				notifyMsg("debug", "Table:"+schemaName+"\nField:"+field.Name+"\nType:"+tag[1]+"\n")
+			}
 
-			args := make([]any, 0)
+			var res any
 
-			argNums := []string{}
+			res = result[btag[0]]
 
-			var i int
-
-			for _, field := range reflect.VisibleFields(structType) {
-				if field.Tag.Get("omit") == "true" {
-					continue
-				}
-
-				tag, btag := getTag(field) // Here we need both
-				if debug {
-					notifyMsg("debug", "Table:"+schemaName+"\nField:"+field.Name+"\nType:"+tag[1]+"\n")
-				}
-
-				var res any
-
-				res = result[btag[0]]
-
-				if res == nil {
-					if field.Tag.Get("defaultfunc") != "" {
-						fn := exportedFuncs[field.Tag.Get("defaultfunc")]
-						if fn == nil {
-							panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
-						}
-						res = fn.function(result[fn.param])
+			if res == nil {
+				if field.Tag.Get("defaultfunc") != "" {
+					fn := exportedFuncs[field.Tag.Get("defaultfunc")]
+					if fn == nil {
+						panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
 					}
+					res = fn.function(result[fn.param])
 				}
+			}
 
-				// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
-				if res == nil {
-					if field.Tag.Get("default") != "" {
-						res = resolveInput(field.Tag.Get("default"))
-					} else {
-						// Ask user what to do
-						var flag bool = true
-						for flag {
-							fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? ")
-							var input string
-							fmt.Scanln(&input)
-							res = resolveInput(input)
+			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
+			if res == nil {
+				if field.Tag.Get("default") != "" {
+					res = resolveInput(field.Tag.Get("default"))
+					if resStr, ok := res.(string); ok {
+						resStr = strings.TrimPrefix(resStr, "'")
+						resStr = strings.TrimSuffix(resStr, "'")
 
-							if input != "" {
-								fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
-								var confirm string
-								fmt.Scanln(&confirm)
-								if confirm == "y" {
-									flag = false
-								}
+						res = resStr
+					}
+				} else {
+					// Ask user what to do
+					var flag bool = true
+					for flag {
+						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? ")
+						var input string
+						fmt.Scanln(&input)
+						res = resolveInput(input)
+
+						if input != "" {
+							fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
+							var confirm string
+							fmt.Scanln(&confirm)
+							if confirm == "y" {
+								flag = false
 							}
 						}
 					}
 				}
+			}
 
-				if field.Tag.Get("log") == "1" {
-					fmt.Println("Setting", btag[0], "(", tag[0], ") to", res)
+			if field.Tag.Get("log") == "1" {
+				fmt.Println("Setting", btag[0], "(", tag[0], ") to", res)
+			}
+
+			// Handle mark of timestamptz
+			if strings.HasPrefix(tag[1], "time") {
+				// check if res is int64
+				if debug {
+					notifyMsg("debug", "Converting a "+reflect.TypeOf(res).Name()+" to time.Time")
 				}
 
-				// Handle mark of timestamptz
-				if strings.HasPrefix(tag[1], "time") {
-					// check if res is int64
-					if debug {
-						notifyMsg("debug", "Converting a "+reflect.TypeOf(res).Name()+" to time.Time")
-					}
-
-					if resCast, ok := res.(int64); ok {
-						res = time.UnixMilli(resCast)
-					} else if resCast, ok := res.(float64); ok {
-						res = time.UnixMilli(int64(resCast))
-					} else if resCast, ok := res.(string); ok {
-						// Cast string to int64
-						resD, err := strconv.ParseInt(resCast, 10, 64)
+				if resCast, ok := res.(int64); ok {
+					res = time.UnixMilli(resCast)
+				} else if resCast, ok := res.(float64); ok {
+					res = time.UnixMilli(int64(resCast))
+				} else if resCast, ok := res.(string); ok {
+					// Cast string to int64
+					resD, err := strconv.ParseInt(resCast, 10, 64)
+					if err != nil {
+						// Could be a datetime string
+						resDV, err := time.Parse(time.RFC3339, resCast)
 						if err != nil {
-							// Could be a datetime string
-							resDV, err := time.Parse(time.RFC3339, resCast)
-							if err != nil {
-								// Last ditch effort, try checking if its NOW or something
-								if strings.Contains(resCast, "NOW") {
-									res = time.Now()
-								} else {
-									panic(err)
-								}
+							// Last ditch effort, try checking if its NOW or something
+							if strings.Contains(resCast, "NOW") {
+								res = time.Now()
 							} else {
-								res = resDV
+								panic(err)
 							}
 						} else {
-							res = time.UnixMilli(resD)
+							res = resDV
 						}
-					} else if resCast, ok := res.(primitive.DateTime); ok {
-						res = time.UnixMilli(resCast.Time().UnixMilli())
-					} else if resCast, ok := res.(primitive.A); ok {
-						// For each int64 in the array, convert to time.Time
-						resV := make([]time.Time, len(resCast))
-						for i, v := range resCast {
-							if val, ok := v.(int64); ok {
-								resV[i] = time.UnixMilli(val)
-							} else if val, ok := v.(float64); ok {
-								resV[i] = time.UnixMilli(int64(val))
-							}
-						}
-						res = resV
+					} else {
+						res = time.UnixMilli(resD)
 					}
-				}
-
-				// Handle tolist
-				if field.Tag.Get("tolist") == "true" {
-					if resCast, ok := res.(string); ok {
-						res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
-
-						if debug {
-							notifyMsg("debug", "Converting "+resCast+" to list")
+				} else if resCast, ok := res.(primitive.DateTime); ok {
+					res = time.UnixMilli(resCast.Time().UnixMilli())
+				} else if resCast, ok := res.(primitive.A); ok {
+					// For each int64 in the array, convert to time.Time
+					resV := make([]time.Time, len(resCast))
+					for i, v := range resCast {
+						if val, ok := v.(int64); ok {
+							resV[i] = time.UnixMilli(val)
+						} else if val, ok := v.(float64); ok {
+							resV[i] = time.UnixMilli(int64(val))
 						}
 					}
+					res = resV
 				}
-
-				args = append(args, res)
-
-				argNums = append(argNums, "$"+strconv.Itoa(i+1))
-
-				i++
 			}
 
-			sqlStr += strings.Join(argNums, ",") + ")"
+			// Handle tolist
+			if field.Tag.Get("tolist") == "true" {
+				if resCast, ok := res.(string); ok {
+					res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
 
-			if debug {
-				notifyMsg("debug", "SQL String: "+sqlStr)
-			}
-
-			_, pgerr = pool.Exec(ctx, sqlStr, args...)
-
-			if pgerr != nil {
-				if opts.IgnoreFKError && strings.Contains(pgerr.Error(), "violates foreign key") {
-					return
+					if debug {
+						notifyMsg("debug", "Converting "+resCast+" to list")
+					}
 				}
-				panic(pgerr)
 			}
+
+			args = append(args, res)
+
+			argNums = append(argNums, "$"+strconv.Itoa(i+1))
+
+			i++
 		}
 
-		if opts.Concurrent {
-			go act(result)
-		} else {
-			act(result)
+		sqlStr += strings.Join(argNums, ",") + ")"
+
+		if debug {
+			notifyMsg("debug", "SQL String: "+sqlStr)
 		}
 
-		i++
+		_, pgerr = pool.Exec(ctx, sqlStr, args...)
+
+		if pgerr != nil {
+			if opts.IgnoreFKError && strings.Contains(pgerr.Error(), "violates foreign key") {
+				notifyMsg("warning", "Ignoring foreign key error on iter "+strconv.Itoa(counter)+": "+pgerr.Error())
+				continue
+			}
+			panic(pgerr)
+		}
 	}
+
+	notifyDone(counter, int(count), schemaName)
 }
 
 func main() {

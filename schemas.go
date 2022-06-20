@@ -131,6 +131,33 @@ type Packs struct {
 	Bots    []string  `bson:"bots" json:"bots" tolist:"true"`
 }
 
+type Reviews struct {
+	BotID       string         `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	Author      string         `bson:"author" json:"author" fkey:"users,user_id"`
+	Content     string         `bson:"content" json:"content" default:"'Very good bot!'"`
+	Rate        bool           `bson:"rate" json:"rate" default:"true"`
+	StarRate    int            `bson:"star_rate" json:"stars" default:"1"`
+	LikesRaw    map[string]any `bson:"likes" json:"likes"`
+	DislikesRaw map[string]any `bson:"dislikes" json:"dislikes"`
+	Date        time.Time      `bson:"date" json:"date" default:"NOW()"`
+	Replies     map[string]any `bson:"replies" json:"replies" default:"{}"`
+	Editted     bool           `bson:"editted" json:"editted" default:"false"`
+	Flagged     bool           `bson:"flagged" json:"flagged" default:"false"`
+}
+
+type Tickets struct {
+	ChannelID      string    `bson:"channelID" json:"channel_id"`
+	Topic          string    `bson:"topic" json:"topic" default:"'Support'"`
+	UserID         string    `bson:"userID" json:"user_id"` // No fkey here bc a user may not be a user on the table yet
+	TicketID       string    `bson:"ticketID" json:"id" mark:"serial"`
+	LogURL         string    `bson:"logURL" json:"log_url"`
+	CloseUserID    string    `bson:"closeUserID" json:"close_user_id"`
+	Open           bool      `bson:"open" json:"open" default:"true"`
+	Date           time.Time `bson:"date" json:"date" default:"NOW()"`
+	PanelMessageID string    `bson:"panelMessageID,omitempty" json:"panel_message_id" default:"null"`
+	PanelChannelID string    `bson:"panelChannelID,omitempty" json:"panel_channel_id" default:"null"`
+}
+
 // Exported functions
 var exportedFuncs = map[string]*gfunc{
 	"getuser": {
@@ -201,6 +228,14 @@ func backupSchemas() {
 		IgnoreFKError: true,
 	})
 	backupTool("packs", Packs{}, backupOpts{
+		Concurrent:    false,
+		IgnoreFKError: true,
+	})
+	backupTool("reviews", Reviews{}, backupOpts{
+		Concurrent:    false,
+		IgnoreFKError: true,
+	})
+	backupTool("tickets", Tickets{}, backupOpts{
 		Concurrent:    false,
 		IgnoreFKError: true,
 	})

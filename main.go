@@ -36,6 +36,7 @@ type gfunc struct {
 type backupOpts struct {
 	IgnoreFKError bool
 	RenameTo      string
+	IndexCols     []string
 }
 
 type schemaOpts struct {
@@ -207,7 +208,11 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 				defaultVal = "uuid_generate_v4()"
 			}
 
-			defaultVal = " DEFAULT " + defaultVal
+			if defaultVal == "SKIP" {
+				defaultVal = ""
+			} else {
+				defaultVal = " DEFAULT " + defaultVal
+			}
 		}
 
 		// Create column
@@ -228,6 +233,19 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			if err != nil {
 				panic(err)
 			}
+		}
+	}
+
+	if len(opts.IndexCols) > 0 {
+		// Create index on these columns
+		colList := strings.Join(opts.IndexCols, ",")
+		indexName := schemaName + "_migindex"
+		sqlStr := "CREATE INDEX " + indexName + " ON " + schemaName + "(" + colList + ")"
+
+		_, pgerr = pool.Exec(ctx, sqlStr)
+
+		if pgerr != nil {
+			panic(pgerr)
 		}
 	}
 
@@ -299,6 +317,12 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
 			if res == nil {
 				if field.Tag.Get("default") != "" {
+					if strings.Contains(field.Tag.Get("default"), "SKIP") {
+						notifyMsg("warning", "Skipping row due to default value at iteration "+strconv.Itoa(counter))
+						skipped = true
+						continue
+					}
+
 					res = resolveInput(field.Tag.Get("default"))
 					if resStr, ok := res.(string); ok {
 						resStr = strings.TrimPrefix(resStr, "'")

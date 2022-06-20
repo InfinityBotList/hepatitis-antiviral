@@ -13,8 +13,8 @@ Place all structs to backup in ``schemas.go`` and then add them to ``backupSchem
 These extra options are placed in struct tags in your schema
 
 - ``mark`` -> Marks a custom datatype to use
-- ``default`` -> Sets a default when in doubt
-- ``defaultfunc`` -> Sets a default func that *is* exported in exported functions
+- ``default`` -> Sets a default when in doubt. A default value of ``SKIP`` skips the whole row when it is encountered.
+- ``defaultfunc`` -> Sets a default func that *is* exported in exported functions. Exported functions can use all functions in pubfn.go
 - ``log`` -> Whether to log or not
 - ``tolist`` -> Whether or not to convert string element to a list of strings (if you're schema is bad)
 - ``unique`` -> Whether or not a unique constaint should be set (``true`` or default ``false``)

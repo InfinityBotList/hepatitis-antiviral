@@ -3,10 +3,8 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"time"
-	"unsafe"
 
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
@@ -86,7 +84,7 @@ type Claims struct {
 }
 
 type User struct {
-	UserID        string         `bson:"userID" json:"user_id" unique:"true"`
+	UserID        string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP"`
 	Username      string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
 	Votes         map[string]any `bson:"votes" json:"votes" default:"{}"`
 	PackVotes     map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
@@ -169,14 +167,9 @@ type Transcripts struct {
 }
 
 // Exported functions
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
 
 var exportedFuncs = map[string]*gfunc{
+	// This exported function is MANDATORY, do not remove it
 	"uuidgen": {
 		param: "userID",
 		function: func(p any) any {
@@ -184,29 +177,11 @@ var exportedFuncs = map[string]*gfunc{
 			return uuid.String()
 		},
 	},
+	// This exported function is MANDATORY, do not remove it
 	"gentoken": {
 		param: "userID",
 		function: func(p any) any {
-			// https://stackoverflow.com/questions/22892120/how-to-generate-a-random-string-of-a-fixed-length-in-go
-			const n = 128
-
-			var src = rand.NewSource(time.Now().UnixNano())
-
-			b := make([]byte, n)
-			// A src.Int63() generates 63 random bits, enough for letterIdxMax characters!
-			for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
-				if remain == 0 {
-					cache, remain = src.Int63(), letterIdxMax
-				}
-				if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-					b[i] = letterBytes[idx]
-					i--
-				}
-				cache >>= letterIdxBits
-				remain--
-			}
-
-			return *(*string)(unsafe.Pointer(&b))
+			return RandString(128)
 		},
 	},
 	"getuser": {
@@ -265,7 +240,9 @@ func getOpts() schemaOpts {
 // Place all schemas to be used in the tool here
 func backupSchemas() {
 	backupTool("oauths", Auth{}, backupOpts{})
-	backupTool("bots", Bot{}, backupOpts{})
+	backupTool("bots", Bot{}, backupOpts{
+		IndexCols: []string{"bot_id", "staff_bot", "cross_add", "token"},
+	})
 	backupTool("claims", Claims{}, backupOpts{
 		RenameTo: "reports",
 	})

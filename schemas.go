@@ -71,6 +71,7 @@ type Bot struct {
 	Webhook          *string   `bson:"webhook,omitempty" json:"webhook" default:"null"` // Discord
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"custom_webhook" default:"null"`
+	WebHMac          *bool     `bson:"webHMac,omitempty" json:"hmac" default:"false"`
 	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
 	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`
 }
@@ -251,8 +252,9 @@ func backupSchemas() {
 	backupTool("votes", Votes{}, backupOpts{
 		IgnoreFKError: true,
 	})
-	backupTool("packs", Packs{}, backupOpts{
+	backupTool("packages", Packs{}, backupOpts{
 		IgnoreFKError: true,
+		RenameTo:      "packs",
 	})
 	backupTool("reviews", Reviews{}, backupOpts{
 		IgnoreFKError: true,

@@ -167,6 +167,13 @@ type Transcripts struct {
 	OpenedBy map[string]any `bson:"openedBy" json:"opened_by" default:"{}"`
 }
 
+type Notifications struct {
+	UserID  string `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	URL     string `bson:"url" json:"url"`
+	Message string `bson:"message" json:"message"`
+	Type    string `bson:"type" json:"type"`
+}
+
 // Exported functions
 
 var exportedFuncs = map[string]*gfunc{
@@ -266,6 +273,6 @@ func backupSchemas() {
 	backupTool("transcripts", Transcripts{}, backupOpts{
 		IgnoreFKError: true,
 	})
-}
 
-// Remaining: reviews, tickets (maybe), transcripts (maybe)
+	backupTool("notifications", Notifications{}, backupOpts{})
+}

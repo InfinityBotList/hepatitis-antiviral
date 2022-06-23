@@ -174,6 +174,23 @@ type Notifications struct {
 	Type    string `bson:"type" json:"type"`
 }
 
+type Poppypaw struct {
+	UserID    string    `bson:"id" json:"id" fkey:"users,user_id"`
+	NotifID   string    `bson:"notifId" json:"notif_id"`
+	Auth      string    `bson:"auth" json:"auth"`
+	P256dh    string    `bson:"p256dh" json:"p256dh"`
+	Endpoint  string    `bson:"endpoint" json:"endpoint"`
+	CreatedAt time.Time `bson:"createdAt" json:"created_at" default:"NOW()"`
+	UA        string    `bson:"ua" json:"ua" default:"''"`
+}
+
+type Silverpelt struct {
+	UserID    string    `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	BotID     string    `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	CreatedAt time.Time `bson:"createdAt" json:"created_at" default:"NOW()"`
+	LastAcked time.Time `bson:"lastAcked" json:"last_acked" default:"NOW()"`
+}
+
 // Exported functions
 
 var exportedFuncs = map[string]*gfunc{
@@ -273,6 +290,10 @@ func backupSchemas() {
 	backupTool("transcripts", Transcripts{}, backupOpts{
 		IgnoreFKError: true,
 	})
+
+	backupTool("poppypaw", Poppypaw{}, backupOpts{})
+
+	backupTool("silverpelt", Silverpelt{}, backupOpts{})
 
 	backupTool("notifications", Notifications{}, backupOpts{})
 }

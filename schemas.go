@@ -77,6 +77,12 @@ type Bot struct {
 	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`
 }
 
+type ActionLog struct {
+	BotID     string    `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	Timestamp time.Time `bson:"ts" json:"ts" default:"NOW()"`
+	Event     string    `bson:"event" json:"event"`
+}
+
 type Claims struct {
 	BotID       string    `bson:"botID" json:"bot_id" unique:"true" fkey:"bots,bot_id"`
 	ClaimedBy   string    `bson:"claimedBy" json:"claimed_by"`
@@ -346,4 +352,6 @@ func backupSchemas() {
 	backupTool("silverpelt", Silverpelt{}, backupOpts{})
 
 	backupTool("notifications", Notifications{}, backupOpts{})
+
+	backupTool("action_logs", ActionLog{}, backupOpts{})
 }

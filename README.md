@@ -1,4 +1,13 @@
-# Move from mongo to postgres migration tool
+<h2 align='center'>
+  <img src="https://cdn.infinitybots.xyz/images/png/Infinity5.png" height='100px' width='100px' />
+  <br> 
+  Calypso
+</h2>
+<p align="center">
+ Simple Tool for Migrating Mongoose Data/Collections to Postgres
+</p>
+
+<hr>
 
 ## You should be able to rawly plugin your Go structs to this tool
 

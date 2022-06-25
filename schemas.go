@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -85,7 +86,7 @@ type Claims struct {
 }
 
 type User struct {
-	UserID        string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP"`
+	UserID        string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
 	Username      string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
 	Votes         map[string]any `bson:"votes" json:"votes" default:"{}"`
 	PackVotes     map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
@@ -211,6 +212,18 @@ var exportedFuncs = map[string]*gfunc{
 			return RandString(128)
 		},
 	},
+	"usertrim": {
+		param: "userID",
+		function: func(p any) any {
+			if p == nil {
+				return p
+			}
+
+			userId := p.(string)
+
+			return strings.TrimSpace(userId)
+		},
+	},
 	// Checks if user exists, otherwise adds one
 	"usercheck": {
 		param: "main_owner",
@@ -220,6 +233,8 @@ var exportedFuncs = map[string]*gfunc{
 			}
 
 			userId := p.(string)
+
+			userId = strings.TrimSpace(userId)
 
 			var count int64
 
@@ -237,7 +252,7 @@ var exportedFuncs = map[string]*gfunc{
 				}
 			}
 
-			return p
+			return userId
 		},
 	},
 	// Gets a user
@@ -298,7 +313,8 @@ func getOpts() schemaOpts {
 func backupSchemas() {
 	backupTool("oauths", Auth{}, backupOpts{})
 	backupTool("users", User{}, backupOpts{
-		IgnoreFKError: true,
+		IgnoreFKError:     true,
+		IgnoreUniqueError: true,
 	})
 	backupTool("bots", Bot{}, backupOpts{
 		IndexCols: []string{"bot_id", "staff_bot", "cross_add", "token"},

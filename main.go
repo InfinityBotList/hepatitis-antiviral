@@ -34,9 +34,10 @@ type gfunc struct {
 }
 
 type backupOpts struct {
-	IgnoreFKError bool
-	RenameTo      string
-	IndexCols     []string
+	IgnoreFKError     bool
+	IgnoreUniqueError bool
+	RenameTo          string
+	IndexCols         []string
 }
 
 type schemaOpts struct {
@@ -453,6 +454,9 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 		if pgerr != nil {
 			if opts.IgnoreFKError && strings.Contains(pgerr.Error(), "violates foreign key") {
 				notifyMsg("warning", "Ignoring foreign key error on iter "+strconv.Itoa(counter)+": "+pgerr.Error())
+				continue
+			} else if opts.IgnoreUniqueError && strings.Contains(pgerr.Error(), "unique constraint") {
+				notifyMsg("warning", "Ignoring unique error on iter "+strconv.Itoa(counter)+": "+pgerr.Error())
 				continue
 			}
 			panic(pgerr)

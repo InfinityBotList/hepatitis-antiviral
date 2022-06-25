@@ -28,7 +28,7 @@ type Bot struct {
 	Name             string    `bson:"botName" json:"name"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
-	Owner            string    `bson:"main_owner" json:"owner"`
+	Owner            string    `bson:"main_owner" json:"owner" fkey:"users,user_id" pre:"usercheck"`
 	AdditionalOwners []string  `bson:"additional_owners" json:"additional_owners"`
 	StaffBot         bool      `bson:"staff" json:"staff_bot" default:"false"`
 	Short            string    `bson:"short" json:"short"`
@@ -92,6 +92,8 @@ type User struct {
 	Staff         bool           `bson:"staff" json:"staff" default:"false"`
 	Admin         bool           `bson:"admin" json:"admin" default:"false"`
 	Certified     bool           `bson:"certified" json:"certified" default:"false"`
+	IBLDev        bool           `bson:"ibldev" json:"ibldev" default:"false"`
+	IBLHDev       bool           `bson:"iblhdev" json:"iblhdev" default:"false"`
 	Developer     bool           `bson:"developer" json:"developer" default:"false"`
 	Notifications bool           `bson:"notifications" json:"notifications" default:"false"`
 	Website       *string        `bson:"website,omitempty" json:"website" default:"null"`
@@ -209,6 +211,36 @@ var exportedFuncs = map[string]*gfunc{
 			return RandString(128)
 		},
 	},
+	// Checks if user exists, otherwise adds one
+	"usercheck": {
+		param: "main_owner",
+		function: func(p any) any {
+			if p == nil {
+				return p
+			}
+
+			userId := p.(string)
+
+			var count int64
+
+			err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			if count == 0 {
+				notifyMsg("warning", "User not found, adding")
+
+				if _, err = pool.Exec(ctx, "INSERT INTO users (user_id, api_token) VALUES ($1, $2)", p, RandString(128)); err != nil {
+					panic(err)
+				}
+			}
+
+			return p
+		},
+	},
+	// Gets a user
 	"getuser": {
 		param: "userID", // The parameter from mongo to accept
 		function: func(p any) any {
@@ -265,13 +297,15 @@ func getOpts() schemaOpts {
 // Place all schemas to be used in the tool here
 func backupSchemas() {
 	backupTool("oauths", Auth{}, backupOpts{})
+	backupTool("users", User{}, backupOpts{
+		IgnoreFKError: true,
+	})
 	backupTool("bots", Bot{}, backupOpts{
 		IndexCols: []string{"bot_id", "staff_bot", "cross_add", "token"},
 	})
 	backupTool("claims", Claims{}, backupOpts{
 		RenameTo: "reports",
 	})
-	backupTool("users", User{}, backupOpts{})
 	backupTool("announcements", Announcements{}, backupOpts{})
 	backupTool("votes", Votes{}, backupOpts{
 		IgnoreFKError: true,

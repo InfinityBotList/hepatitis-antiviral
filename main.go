@@ -314,6 +314,14 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 				}
 			}
 
+			if field.Tag.Get("pre") != "" {
+				fn := exportedFuncs[field.Tag.Get("pre")]
+				if fn == nil {
+					panic("Pre function " + field.Tag.Get("pre") + " not found")
+				}
+				res = fn.function(result[fn.param])
+			}
+
 			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
 			if res == nil {
 				if field.Tag.Get("default") != "" {

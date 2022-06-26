@@ -75,10 +75,13 @@ type Bot struct {
 	WebHMac          *bool     `bson:"webHMac,omitempty" json:"hmac" default:"false"`
 	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
 	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`
+	LastClaimed      time.Time `bson:"last_claimed,omitempty" json:"last_claimed" default:"null"`
 }
 
 type ActionLog struct {
 	BotID     string    `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	StaffID   string    `bson:"staff_id" json:"staff_id" fkey:"users,user_id"`
+	ActReason string    `bson:"reason" json:"action_reason" default:"'No reason'"`
 	Timestamp time.Time `bson:"ts" json:"ts" default:"NOW()"`
 	Event     string    `bson:"event" json:"event"`
 }

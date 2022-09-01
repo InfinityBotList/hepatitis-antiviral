@@ -95,25 +95,30 @@ type Claims struct {
 }
 
 type User struct {
-	UserID        string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
-	Username      string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
-	Votes         map[string]any `bson:"votes" json:"votes" default:"{}"`
-	PackVotes     map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
-	Staff         bool           `bson:"staff" json:"staff" default:"false"`
-	Admin         bool           `bson:"admin" json:"admin" default:"false"`
-	Certified     bool           `bson:"certified" json:"certified" default:"false"`
-	IBLDev        bool           `bson:"ibldev" json:"ibldev" default:"false"`
-	IBLHDev       bool           `bson:"iblhdev" json:"iblhdev" default:"false"`
-	Developer     bool           `bson:"developer" json:"developer" default:"false"`
-	Notifications bool           `bson:"notifications" json:"notifications" default:"false"`
-	Website       *string        `bson:"website,omitempty" json:"website" default:"null"`
-	Github        *string        `bson:"github,omitempty" json:"github" default:"null"`
-	Nickname      *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
-	APIToken      string         `bson:"apiToken" json:"api_token" defaultfunc:"gentoken"`
-	About         *string        `bson:"about,omitempty" json:"about" default:"'I am a very mysterious person'"`
-	VoteBanned    bool           `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`
-	StaffStats    map[string]any `bson:"staff_stats" json:"staff_stats" default:"{}"`
-	NewStaffStats map[string]any `bson:"new_staff_stats" json:"new_staff_stats" default:"{}"`
+	UserID                    string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
+	Username                  string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
+	Votes                     map[string]any `bson:"votes" json:"votes" default:"{}"`
+	PackVotes                 map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
+	StaffOnboarded            bool           `bson:"staff_onboarded" json:"staff_onboarded" default:"false"`
+	StaffOnboardState         string         `bson:"staff_onboard_state" json:"staff_onboard_state" default:"'pending'"`
+	StaffOnboardLastStartTime time.Time      `bson:"staff_onboard_last_start_time,omitempty" json:"staff_onboard_last_start_time" default:"null"`
+	StaffOnboardSessionCode   string         `bson:"staff_onboard_session_code,omitempty" json:"staff_onboard_session_code,omitempty" default:"null"`
+	Staff                     bool           `bson:"staff" json:"staff" default:"false"`
+	Admin                     bool           `bson:"admin" json:"admin" default:"false"`
+	HAdmin                    bool           `bson:"hadmin" json:"hadmin" default:"false"`
+	Certified                 bool           `bson:"certified" json:"certified" default:"false"`
+	IBLDev                    bool           `bson:"ibldev" json:"ibldev" default:"false"`
+	IBLHDev                   bool           `bson:"iblhdev" json:"iblhdev" default:"false"`
+	Developer                 bool           `bson:"developer" json:"developer" default:"false"`
+	Notifications             bool           `bson:"notifications" json:"notifications" default:"false"`
+	Website                   *string        `bson:"website,omitempty" json:"website" default:"null"`
+	Github                    *string        `bson:"github,omitempty" json:"github" default:"null"`
+	Nickname                  *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
+	APIToken                  string         `bson:"apiToken" json:"api_token" defaultfunc:"gentoken"`
+	About                     *string        `bson:"about,omitempty" json:"about" default:"'I am a very mysterious person'"`
+	VoteBanned                bool           `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`
+	StaffStats                map[string]any `bson:"staff_stats" json:"staff_stats" default:"{}"`
+	NewStaffStats             map[string]any `bson:"new_staff_stats" json:"new_staff_stats" default:"{}"`
 }
 
 type Announcements struct {

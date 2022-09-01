@@ -7,6 +7,8 @@ require (
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d
 )
 
+require github.com/joho/godotenv v1.4.0 // indirect
+
 require (
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/snappy v0.0.1 // indirect

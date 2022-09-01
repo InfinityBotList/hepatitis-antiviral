@@ -6,12 +6,14 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -43,6 +45,8 @@ type backupOpts struct {
 type schemaOpts struct {
 	TableName string
 }
+
+func init() { godotenv.Load() }
 
 func getTag(field reflect.StructField) (json []string, bson []string) {
 	if v, ok := tagCache[field.Name]; ok {
@@ -512,7 +516,7 @@ func main() {
 	sendRoutine()
 
 	// Create mongodb conn
-	client, err = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017/infinity"))
+	client, err = mongo.Connect(ctx, options.Client().ApplyURI(os.Getenv("MONGO")))
 
 	if err != nil {
 		panic(err)

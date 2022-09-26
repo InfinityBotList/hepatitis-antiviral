@@ -94,6 +94,12 @@ type Claims struct {
 	UnclaimedAt time.Time `bson:"unclaimedAt" json:"unclaimed_at" default:"NOW()"`
 }
 
+type OnboardData struct {
+	UserID      string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	OnboardCode string         `bson:"onboard_code" json:"onboard_code"`
+	Data        map[string]any `bson:"data" json:"data" default:"{}"`
+}
+
 type User struct {
 	UserID                    string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
 	Username                  string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
@@ -102,6 +108,7 @@ type User struct {
 	StaffOnboarded            bool           `bson:"staff_onboarded" json:"staff_onboarded" default:"false"`
 	StaffOnboardState         string         `bson:"staff_onboard_state" json:"staff_onboard_state" default:"'pending'"`
 	StaffOnboardLastStartTime time.Time      `bson:"staff_onboard_last_start_time,omitempty" json:"staff_onboard_last_start_time" default:"null"`
+	StaffOnboardMacroTime     time.Time      `bson:"staff_onboard_macro_time,omitempty" json:"staff_onboard_macro_time" default:"null"`
 	StaffOnboardSessionCode   string         `bson:"staff_onboard_session_code,omitempty" json:"staff_onboard_session_code,omitempty" default:"null"`
 	Staff                     bool           `bson:"staff" json:"staff" default:"false"`
 	Admin                     bool           `bson:"admin" json:"admin" default:"false"`
@@ -362,4 +369,6 @@ func backupSchemas() {
 	backupTool("notifications", Notifications{}, backupOpts{})
 
 	backupTool("action_logs", ActionLog{}, backupOpts{})
+
+	backupTool("onboard_data", OnboardData{}, backupOpts{})
 }

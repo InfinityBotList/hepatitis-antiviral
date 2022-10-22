@@ -27,6 +27,7 @@ type UUID = string
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
 	Name             string    `bson:"botName" json:"name"`
+	Avatar           string    `bson:"avatar" json:"avatar" defaultfunc:"getbotavatar"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
 	Owner            string    `bson:"main_owner" json:"owner" fkey:"users,user_id" pre:"usercheck"`
@@ -245,6 +246,56 @@ var exportedFuncs = map[string]*gfunc{
 			return strings.TrimSpace(userId)
 		},
 	},
+	"getbotavatar": {
+		param: "botID",
+		function: func(p any) any {
+			userId := p.(string)
+
+			// Call http://localhost:8080/_duser/ID
+			resp, err := http.Get("http://localhost:8080/_duser/" + userId)
+
+			if err != nil {
+				fmt.Println("Bot fetch error:", err)
+				return "https://cdn.discordapp.com/embed/avatars/0.png"
+			}
+
+			if resp.StatusCode != 200 {
+				fmt.Println("Bot fetch error:", resp.StatusCode)
+				return "https://cdn.discordapp.com/embed/avatars/0.png"
+			}
+
+			// Read the response body
+			body, err := ioutil.ReadAll(resp.Body)
+
+			if err != nil {
+				fmt.Println("Bot fetch error:", err)
+				return "https://cdn.discordapp.com/embed/avatars/0.png"
+			}
+
+			var data struct {
+				Username string `json:"username"`
+				Avatar   string `json:"avatar"`
+			}
+
+			// Unmarshal the response body
+			err = json.Unmarshal(body, &data)
+
+			if err != nil {
+				fmt.Println("Bot fetch error:", err)
+				return "https://cdn.discordapp.com/embed/avatars/0.png"
+			}
+
+			if data.Avatar == "" {
+				data.Avatar = "https://cdn.discordapp.com/embed/avatars/0.png"
+			}
+
+			// Update mongodb with the username and avatar
+			client.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"botName": data.Username}})
+			client.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"avatar": data.Avatar}})
+			return data.Avatar
+
+		},
+	},
 	// Checks if user exists, otherwise adds one
 	"usercheck": {
 		param: "main_owner",
@@ -315,9 +366,8 @@ var exportedFuncs = map[string]*gfunc{
 				return nil
 			}
 
-			// Update mongodb with the username
+			// Update mongodb with the username and avatar
 			client.Database("infinity").Collection("users").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"username": data.Username}})
-
 			return data.Username
 		},
 	},

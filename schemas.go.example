@@ -1,0 +1,90 @@
+package main
+
+import (
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
+)
+
+// Schemas here
+//
+// Either use schema struct tag (or bson + mark struct tag for special type overrides)
+
+// Tool below
+
+type Auth struct {
+	ID    *string `bson:"id,omitempty" json:"id" notnull:"true"`
+	Token string  `bson:"token" json:"token" notnull:"true"`
+}
+
+type Apps struct {
+	UserID    string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	Position  string         `bson:"position" json:"position"`
+	CreatedAt time.Time      `bson:"createdAt" json:"created_at" default:"NOW()"`
+	Answers   map[string]any `bson:"answers" json:"answers" default:"{}"`
+	State     string         `bson:"state" json:"state" default:"'pending'"`
+	Likes     []int64        `bson:"likes" json:"likes" default:"{}"`
+	Dislikes  []int64        `bson:"dislikes" json:"dislikes" default:"{}"`
+}
+
+// Exported functions
+
+var exportedFuncs = map[string]*gfunc{
+	"uuidgen": {
+		param: "userID",
+		function: func(p any) any {
+			uuid := uuid.New()
+			return uuid.String()
+		},
+	},
+	// Checks if user exists, otherwise adds one
+	"usercheck": {
+		param: "main_owner",
+		function: func(p any) any {
+			if p == nil {
+				return p
+			}
+
+			userId := p.(string)
+
+			userId = strings.TrimSpace(userId)
+
+			var count int64
+
+			err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			if count == 0 {
+				notifyMsg("warning", "User not found, adding")
+
+				if _, err = pool.Exec(ctx, "INSERT INTO users (user_id, api_token) VALUES ($1, $2)", p, RandString(128)); err != nil {
+					panic(err)
+				}
+			}
+
+			return userId
+		},
+	},
+}
+
+// Place all schema options here
+func getOpts() schemaOpts {
+	return schemaOpts{
+		TableName: "infinity",
+	}
+}
+
+// Place all schemas to be used in the tool here
+func backupSchemas() {
+	backupTool("oauths", Auth{}, backupOpts{})
+
+	backupTool("apps", Apps{}, backupOpts{})
+}

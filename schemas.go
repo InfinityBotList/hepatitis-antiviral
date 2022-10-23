@@ -216,10 +216,19 @@ type Silverpelt struct {
 	LastAcked time.Time `bson:"lastAcked" json:"last_acked" default:"NOW()"`
 }
 
+type Apps struct {
+	UserID    string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	Position  string         `bson:"position" json:"position"`
+	CreatedAt time.Time      `bson:"createdAt" json:"created_at" default:"NOW()"`
+	Answers   map[string]any `bson:"answers" json:"answers" default:"{}"`
+	State     string         `bson:"state" json:"state" default:"'pending'"`
+	Likes     []int64        `bson:"likes" json:"likes" default:"{}"`
+	Dislikes  []int64        `bson:"dislikes" json:"dislikes" default:"{}"`
+}
+
 // Exported functions
 
 var exportedFuncs = map[string]*gfunc{
-	// This exported function is MANDATORY, do not remove it
 	"uuidgen": {
 		param: "userID",
 		function: func(p any) any {
@@ -227,7 +236,6 @@ var exportedFuncs = map[string]*gfunc{
 			return uuid.String()
 		},
 	},
-	// This exported function is MANDATORY, do not remove it
 	"gentoken": {
 		param: "userID",
 		function: func(p any) any {
@@ -421,4 +429,6 @@ func backupSchemas() {
 	backupTool("action_logs", ActionLog{}, backupOpts{})
 
 	backupTool("onboard_data", OnboardData{}, backupOpts{})
+
+	backupTool("apps", Apps{}, backupOpts{})
 }

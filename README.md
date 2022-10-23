@@ -33,4 +33,20 @@ These extra options are placed in struct tags in your schema
 
 ### Daemon
 
-For the purposes of logging and asking for user input while migrating, a foreground ``daemon`` is required/used. The daemon is written in python. Run ``cd daemon && python3 daemon.py`` to start it
+For the purposes of logging and asking for user input while migrating, a foreground ``daemon`` is required/used. The daemon is written in python. Run ``cd daemon && python3 daemon.py`` to start it.
+
+### Usage
+
+1. Add your schemas and export functions (if you need custom code to be run before (``pre``) or as a default (``defaultfunc``))
+
+**Example:**
+
+```go
+        UserID                    string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
+        Username                  string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
+PackVotes                 map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
+```
+
+2. Using tmux, screen or a second terminal/tty, run the daemon using ``cd daemon && python3 daemon.py``
+3. Do ``go build`` to build the tool
+4. Run ``hepatitis-antiviral`` (ensure daemon is still running)

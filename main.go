@@ -223,6 +223,7 @@ func backupTool(schemaName string, schema any, opts backupOpts) {
 		// Create column
 		_, err := pool.Exec(ctx, "ALTER TABLE "+schemaName+" ADD COLUMN "+tag[0]+" "+strings.Join(tag[1:], " ")+uniqueVal+defaultVal)
 		if err != nil {
+			fmt.Println("ALTER TABLE " + schemaName + " ADD COLUMN " + tag[0] + " " + strings.Join(tag[1:], " ") + uniqueVal + defaultVal)
 			panic(err)
 		}
 

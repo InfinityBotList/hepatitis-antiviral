@@ -1,3 +1,3 @@
-cd ~/InfinityBotList/Infinity-Next/seedman
+cd ~/seedman
 bash seedbin.sh
 sh copytoguide.sh

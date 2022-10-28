@@ -217,14 +217,15 @@ type Silverpelt struct {
 }
 
 type Apps struct {
-	AppID     string         `bson:"appID" json:"app_id"`
-	UserID    string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
-	Position  string         `bson:"position" json:"position"`
-	CreatedAt time.Time      `bson:"createdAt" json:"created_at" default:"NOW()"`
-	Answers   map[string]any `bson:"answers" json:"answers" default:"{}"`
-	State     string         `bson:"state" json:"state" default:"'pending'"`
-	Likes     []int64        `bson:"likes" json:"likes" default:"{}"`
-	Dislikes  []int64        `bson:"dislikes" json:"dislikes" default:"{}"`
+	AppID            string         `bson:"appID" json:"app_id"`
+	UserID           string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	Position         string         `bson:"position" json:"position"`
+	CreatedAt        time.Time      `bson:"createdAt" json:"created_at" default:"NOW()"`
+	Answers          map[string]any `bson:"answers" json:"answers" default:"{}"`
+	InterviewAnswers map[string]any `bson:"interviewAnswers" json:"interview_answers" default:"{}"`
+	State            string         `bson:"state" json:"state" default:"'pending'"`
+	Likes            []int64        `bson:"likes" json:"likes" default:"{}"`
+	Dislikes         []int64        `bson:"dislikes" json:"dislikes" default:"{}"`
 }
 
 // Exported functions

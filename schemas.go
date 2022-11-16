@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"hepatitis-antiviral/cli"
@@ -14,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+var ctx = context.Background()
 
 // Schemas here
 //
@@ -441,89 +444,90 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 	},
 }
 
-// Place all schema options here
-func getOpts() schemaOpts {
-	return schemaOpts{
-		TableName: "infinity",
-	}
-}
+func main() {
+	// Place all schemas to be used in the tool here
 
-// Place all schemas to be used in the tool here
-func backupSchemas() {
-	source = mongo.MongoSource{
-		ConnectionURL: os.Getenv("MONGO"),
-		DatabaseName:  "infinity",
-	}
+	cli.Main(cli.App{
+		SchemaOpts: cli.SchemaOpts{
+			TableName: "infinity",
+		},
+		BackupFunc: func() {
+			source = mongo.MongoSource{
+				ConnectionURL: os.Getenv("MONGO"),
+				DatabaseName:  "infinity",
+			}
 
-	err := source.Connect()
+			err := source.Connect()
 
-	if err != nil {
-		panic(err)
-	}
+			if err != nil {
+				panic(err)
+			}
 
-	cli.BackupTool(source, "oauths", Auth{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "users", User{}, cli.BackupOpts{
-		IgnoreFKError:     true,
-		IgnoreUniqueError: true,
-		ExportedFuncs:     exportedFuncs,
-	})
-	cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
-		IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token"},
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "claims", Claims{}, cli.BackupOpts{
-		RenameTo:      "reports",
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "announcements", Announcements{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "votes", Votes{}, cli.BackupOpts{
-		IgnoreFKError: true,
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "packages", Packs{}, cli.BackupOpts{
-		IgnoreFKError: true,
-		RenameTo:      "packs",
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "reviews", Reviews{}, cli.BackupOpts{
-		IgnoreFKError: true,
-		ExportedFuncs: exportedFuncs,
-	})
-	cli.BackupTool(source, "tickets", Tickets{}, cli.BackupOpts{
-		IgnoreFKError: true,
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "oauths", Auth{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "users", User{}, cli.BackupOpts{
+				IgnoreFKError:     true,
+				IgnoreUniqueError: true,
+				ExportedFuncs:     exportedFuncs,
+			})
+			cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
+				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token"},
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "claims", Claims{}, cli.BackupOpts{
+				RenameTo:      "reports",
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "announcements", Announcements{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "votes", Votes{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "packages", Packs{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				RenameTo:      "packs",
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "reviews", Reviews{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "tickets", Tickets{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "transcripts", Transcripts{}, cli.BackupOpts{
-		IgnoreFKError: true,
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "transcripts", Transcripts{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "poppypaw", Poppypaw{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "poppypaw", Poppypaw{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "silverpelt", Silverpelt{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "silverpelt", Silverpelt{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "notifications", Notifications{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "notifications", Notifications{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "action_logs", ActionLog{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "action_logs", ActionLog{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "onboard_data", OnboardData{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
-	})
+			cli.BackupTool(source, "onboard_data", OnboardData{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
 
-	cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
-		ExportedFuncs: exportedFuncs,
+			cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
+		},
 	})
 }

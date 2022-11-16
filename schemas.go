@@ -1,9 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"hepatitis-antiviral/cli"
+	"hepatitis-antiviral/sources/mongo"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,6 +22,8 @@ import (
 
 // Tool below
 
+var source mongo.MongoSource
+
 type Auth struct {
 	ID    *string `bson:"id,omitempty" json:"id" notnull:"true"`
 	Token string  `bson:"token" json:"token" notnull:"true"`
@@ -26,7 +33,8 @@ type UUID = string
 
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
-	Name             string    `bson:"botName" json:"name"`
+	ClientID         string    `bson:"clientID,omitempty" json:"client_id" default:"null"` // Its only nullable for now
+	Name             string    `bson:"botName" json:"name" unique:"true" pre:"updname"`
 	Avatar           string    `bson:"avatar" json:"avatar" defaultfunc:"getbotavatar"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
@@ -230,23 +238,23 @@ type Apps struct {
 
 // Exported functions
 
-var exportedFuncs = map[string]*gfunc{
+var exportedFuncs = map[string]*cli.ExportedFunction{
 	"uuidgen": {
-		param: "userID",
-		function: func(p any) any {
+		Param: "userID",
+		Function: func(p any) any {
 			uuid := uuid.New()
 			return uuid.String()
 		},
 	},
 	"gentoken": {
-		param: "userID",
-		function: func(p any) any {
+		Param: "userID",
+		Function: func(p any) any {
 			return RandString(128)
 		},
 	},
 	"usertrim": {
-		param: "userID",
-		function: func(p any) any {
+		Param: "userID",
+		Function: func(p any) any {
 			if p == nil {
 				return p
 			}
@@ -257,9 +265,11 @@ var exportedFuncs = map[string]*gfunc{
 		},
 	},
 	"getbotavatar": {
-		param: "botID",
-		function: func(p any) any {
+		Param: "botID",
+		Function: func(p any) any {
 			userId := p.(string)
+
+			fmt.Println("Getting avatar for", userId)
 
 			// Call http://localhost:8080/_duser/ID
 			resp, err := http.Get("http://localhost:8080/_duser/" + userId)
@@ -300,16 +310,16 @@ var exportedFuncs = map[string]*gfunc{
 			}
 
 			// Update mongodb with the username and avatar
-			client.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"botName": data.Username}})
-			client.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"avatar": data.Avatar}})
+			source.Conn.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"botID": userId}, bson.M{"$set": bson.M{"botName": data.Username}})
+			source.Conn.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"botID": userId}, bson.M{"$set": bson.M{"avatar": data.Avatar}})
 			return data.Avatar
 
 		},
 	},
 	// Checks if user exists, otherwise adds one
 	"usercheck": {
-		param: "main_owner",
-		function: func(p any) any {
+		Param: "main_owner",
+		Function: func(p any) any {
 			if p == nil {
 				return p
 			}
@@ -320,16 +330,16 @@ var exportedFuncs = map[string]*gfunc{
 
 			var count int64
 
-			err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
+			err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
 
 			if err != nil {
 				panic(err)
 			}
 
 			if count == 0 {
-				notifyMsg("warning", "User not found, adding")
+				cli.NotifyMsg("warning", "User not found, adding")
 
-				if _, err = pool.Exec(ctx, "INSERT INTO users (user_id, api_token) VALUES ($1, $2)", p, RandString(128)); err != nil {
+				if _, err = cli.Pool.Exec(ctx, "INSERT INTO users (user_id, api_token) VALUES ($1, $2)", p, RandString(128)); err != nil {
 					panic(err)
 				}
 			}
@@ -337,10 +347,35 @@ var exportedFuncs = map[string]*gfunc{
 			return userId
 		},
 	},
+	"updname": {
+		Param: "botName",
+		Function: func(p any) any {
+			name := p.(string)
+
+			if name == "" {
+				return "unknown-" + RandString(17)
+			}
+
+			// Check if already in db
+			var count int64
+
+			err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots WHERE name = $1", name).Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			if count != 0 {
+				return name + "-" + strconv.FormatInt(count, 10)
+			}
+
+			return name
+		},
+	},
 	// Gets a user
 	"getuser": {
-		param: "userID", // The parameter from mongo to accept
-		function: func(p any) any {
+		Param: "userID", // The parameter from mongo to accept
+		Function: func(p any) any {
 			userId := p.(string)
 
 			// Call http://localhost:8080/_duser/ID
@@ -377,7 +412,7 @@ var exportedFuncs = map[string]*gfunc{
 			}
 
 			// Update mongodb with the username and avatar
-			client.Database("infinity").Collection("users").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"username": data.Username}})
+			source.Conn.Database("infinity").Collection("users").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"username": data.Username}})
 			return data.Username
 		},
 	},
@@ -392,45 +427,80 @@ func getOpts() schemaOpts {
 
 // Place all schemas to be used in the tool here
 func backupSchemas() {
-	backupTool("oauths", Auth{}, backupOpts{})
-	backupTool("users", User{}, backupOpts{
+	source = mongo.MongoSource{
+		ConnectionURL: os.Getenv("MONGO"),
+		DatabaseName:  "infinity",
+	}
+
+	err := source.Connect()
+
+	if err != nil {
+		panic(err)
+	}
+
+	cli.BackupTool(source, "oauths", Auth{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
+	cli.BackupTool(source, "users", User{}, cli.BackupOpts{
 		IgnoreFKError:     true,
 		IgnoreUniqueError: true,
+		ExportedFuncs:     exportedFuncs,
 	})
-	backupTool("bots", Bot{}, backupOpts{
-		IndexCols: []string{"bot_id", "staff_bot", "cross_add", "token"},
+	cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
+		IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token"},
+		ExportedFuncs: exportedFuncs,
 	})
-	backupTool("claims", Claims{}, backupOpts{
-		RenameTo: "reports",
+	cli.BackupTool(source, "claims", Claims{}, cli.BackupOpts{
+		RenameTo:      "reports",
+		ExportedFuncs: exportedFuncs,
 	})
-	backupTool("announcements", Announcements{}, backupOpts{})
-	backupTool("votes", Votes{}, backupOpts{
+	cli.BackupTool(source, "announcements", Announcements{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
+	cli.BackupTool(source, "votes", Votes{}, cli.BackupOpts{
 		IgnoreFKError: true,
+		ExportedFuncs: exportedFuncs,
 	})
-	backupTool("packages", Packs{}, backupOpts{
+	cli.BackupTool(source, "packages", Packs{}, cli.BackupOpts{
 		IgnoreFKError: true,
 		RenameTo:      "packs",
+		ExportedFuncs: exportedFuncs,
 	})
-	backupTool("reviews", Reviews{}, backupOpts{
+	cli.BackupTool(source, "reviews", Reviews{}, cli.BackupOpts{
 		IgnoreFKError: true,
+		ExportedFuncs: exportedFuncs,
 	})
-	backupTool("tickets", Tickets{}, backupOpts{
+	cli.BackupTool(source, "tickets", Tickets{}, cli.BackupOpts{
 		IgnoreFKError: true,
+		ExportedFuncs: exportedFuncs,
 	})
 
-	backupTool("transcripts", Transcripts{}, backupOpts{
+	cli.BackupTool(source, "transcripts", Transcripts{}, cli.BackupOpts{
 		IgnoreFKError: true,
+		ExportedFuncs: exportedFuncs,
 	})
 
-	backupTool("poppypaw", Poppypaw{}, backupOpts{})
+	cli.BackupTool(source, "poppypaw", Poppypaw{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 
-	backupTool("silverpelt", Silverpelt{}, backupOpts{})
+	cli.BackupTool(source, "silverpelt", Silverpelt{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 
-	backupTool("notifications", Notifications{}, backupOpts{})
+	cli.BackupTool(source, "notifications", Notifications{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 
-	backupTool("action_logs", ActionLog{}, backupOpts{})
+	cli.BackupTool(source, "action_logs", ActionLog{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 
-	backupTool("onboard_data", OnboardData{}, backupOpts{})
+	cli.BackupTool(source, "onboard_data", OnboardData{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 
-	backupTool("apps", Apps{}, backupOpts{})
+	cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
+		ExportedFuncs: exportedFuncs,
+	})
 }

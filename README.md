@@ -15,7 +15,7 @@ The ``bson`` and ``json`` struct tags define the mongoDB column name (bson) and 
 
 A primary key of ``itag`` is created to identify each element uniquely.
 
-Place all structs to backup in ``schemas.go`` and then add them to ``backupSchemas`` function. Remove old schemas if present
+Place all structs to backup in ``schemas.go`` and then add them to ``backupSchemas`` function. Remove existing schemas if present.
 
 ### Extra options 
 
@@ -46,7 +46,6 @@ For the purposes of logging and asking for user input while migrating, a foregro
         Username                  string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
 PackVotes                 map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
 ```
-
-2. Using tmux, screen or a second terminal/tty, run the daemon using ``cd daemon && python3 daemon.py``
+2. If you wish to add any migrations, add them to ``migrations/miglist.go``
 3. Do ``go build`` to build the tool
-4. Run ``hepatitis-antiviral`` (ensure daemon is still running)
+4. Run ``hepatitis-antiviral`` 

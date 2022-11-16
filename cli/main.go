@@ -6,7 +6,10 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/joho/godotenv"
 )
+
+func init() { godotenv.Load() }
 
 type SchemaOpts struct {
 	TableName string

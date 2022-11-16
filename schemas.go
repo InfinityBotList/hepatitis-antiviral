@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hepatitis-antiviral/cli"
+	"hepatitis-antiviral/migrations"
 	"hepatitis-antiviral/sources/mongo"
 	"io/ioutil"
 	"net/http"
@@ -36,7 +37,6 @@ type UUID = string
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
 	ClientID         string    `bson:"clientID,omitempty" json:"client_id" default:"null"` // Its only nullable for now
-	Avatar           string    `bson:"avatar" json:"avatar" defaultfunc:"getbotavatar"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
 	Owner            string    `bson:"main_owner" json:"owner" fkey:"users,user_id" pre:"usercheck"`
@@ -63,7 +63,7 @@ type Bot struct {
 	Banner           *string   `bson:"background,omitempty" json:"banner" default:"null"`
 	Invite           *string   `bson:"invite" json:"invite" default:"null"`
 	Type             string    `bson:"type" json:"type"`
-	Vanity           *string   `bson:"vanity" json:"vanity" pre:"updname"`
+	Vanity           *string   `bson:"vanity" json:"vanity" pre:"updname" unique:"true"`
 	ExternalSource   string    `bson:"external_source,omitempty" json:"external_source" default:"null"`
 	ListSource       string    `bson:"listSource,omitempty" json:"list_source" mark:"uuid" default:"null"`
 	VoteBanned       bool      `bson:"vote_banned,omitempty" json:"vote_banned" default:"false" notnull:"true"`
@@ -265,58 +265,6 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 			return strings.TrimSpace(userId)
 		},
 	},
-	"getbotavatar": {
-		Param: "botID",
-		Function: func(p any) any {
-			userId := p.(string)
-
-			fmt.Println("Getting avatar for", userId)
-
-			// Call http://localhost:8080/_duser/ID
-			resp, err := http.Get("http://localhost:8080/_duser/" + userId)
-
-			if err != nil {
-				fmt.Println("Bot fetch error:", err)
-				return "https://cdn.discordapp.com/embed/avatars/0.png"
-			}
-
-			if resp.StatusCode != 200 {
-				fmt.Println("Bot fetch error:", resp.StatusCode)
-				return "https://cdn.discordapp.com/embed/avatars/0.png"
-			}
-
-			// Read the response body
-			body, err := ioutil.ReadAll(resp.Body)
-
-			if err != nil {
-				fmt.Println("Bot fetch error:", err)
-				return "https://cdn.discordapp.com/embed/avatars/0.png"
-			}
-
-			var data struct {
-				Username string `json:"username"`
-				Avatar   string `json:"avatar"`
-			}
-
-			// Unmarshal the response body
-			err = json.Unmarshal(body, &data)
-
-			if err != nil {
-				fmt.Println("Bot fetch error:", err)
-				return "https://cdn.discordapp.com/embed/avatars/0.png"
-			}
-
-			if data.Avatar == "" {
-				data.Avatar = "https://cdn.discordapp.com/embed/avatars/0.png"
-			}
-
-			// Update mongodb with the username and avatar
-			source.Conn.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"botID": userId}, bson.M{"$set": bson.M{"botName": data.Username}})
-			source.Conn.Database("infinity").Collection("bots").UpdateOne(ctx, bson.M{"botID": userId}, bson.M{"$set": bson.M{"avatar": data.Avatar}})
-			return data.Avatar
-
-		},
-	},
 	// Checks if user exists, otherwise adds one
 	"usercheck": {
 		Param: "main_owner",
@@ -372,14 +320,14 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 						p = vanity
 					}
 				} else {
-					return RandString(8)
+					return "unknown-" + RandString(12)
 				}
 			}
 
 			name := p.(string)
 
 			if name == "" {
-				return "unknown-" + RandString(17)
+				return "unknown-" + RandString(12)
 			}
 
 			// Check if vanity is taken
@@ -472,7 +420,7 @@ func main() {
 				ExportedFuncs:     exportedFuncs,
 			})
 			cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
-				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token"},
+				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token", "lower(vanity)"},
 				ExportedFuncs: exportedFuncs,
 			})
 			cli.BackupTool(source, "claims", Claims{}, cli.BackupOpts{
@@ -528,6 +476,8 @@ func main() {
 			cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
 				ExportedFuncs: exportedFuncs,
 			})
+
+			migrations.Migrate(context.Background(), cli.Pool)
 		},
 	})
 }

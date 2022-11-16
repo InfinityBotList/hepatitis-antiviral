@@ -11,7 +11,6 @@ import (
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/vbauerster/mpb/v8"
-	"github.com/vbauerster/mpb/v8/decor"
 	"golang.org/x/exp/slices"
 )
 
@@ -142,36 +141,8 @@ func resolveInput(input string) any {
 	return input
 }
 
-func startBar(schemaName string, count int64) {
-	if bar != nil {
-		bar.Abort(true)
-		bar.Wait()
-		mb.Wait()
-	}
-
-	mb = mpb.New(mpb.WithWidth(64))
-
-	bar = mb.New(
-		count,
-		// BarFillerBuilder with custom style
-		mpb.BarStyle(),
-		mpb.PrependDecorators(
-			// display our name with one space on the right
-			decor.Name(schemaName, decor.WC{W: len(schemaName) + 1, C: decor.DidentRight}),
-			// replace ETA decorator with "done" message, OnComplete event
-			decor.OnComplete(
-				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
-			),
-		),
-		mpb.AppendDecorators(decor.Percentage()),
-		mpb.BarRemoveOnComplete(),
-	)
-
-	bar.SetCurrent(0)
-}
-
 func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
-	if bar == nil {
+	if Bar == nil {
 		mb = mpb.New(mpb.WithWidth(64))
 	}
 
@@ -288,14 +259,14 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 
 	var counter int
 
-	startBar(schemaName, count)
+	StartBar(schemaName, count)
 	NotifyMsg("info", "Backing up "+schemaName)
 	for _, result := range data {
 		counter++
 
 		Map = result
 
-		bar.Increment()
+		Bar.Increment()
 
 		var sqlStr string = "INSERT INTO " + schemaName + " ("
 
@@ -374,7 +345,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 					// Ask user what to do
 					var flag bool = true
 					for flag {
-						bar.Abort(true)
+						Bar.Abort(true)
 						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? SKIP to skip this field, or enter a value:")
 						var input string
 						fmt.Scanln(&input)
@@ -382,7 +353,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 						if input == "SKIP" {
 							flag = false
 							skipped = true
-							startBar(schemaName, count)
+							StartBar(schemaName, count)
 							continue
 						}
 
@@ -392,7 +363,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 							fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
 							var confirm string
 							fmt.Scanln(&confirm)
-							startBar(schemaName, count)
+							StartBar(schemaName, count)
 							if confirm == "y" {
 								flag = false
 							}
@@ -497,6 +468,4 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 			panic(pgerr)
 		}
 	}
-
-	notifyDone(counter, int(count), schemaName)
 }

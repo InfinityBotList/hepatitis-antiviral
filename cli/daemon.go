@@ -6,6 +6,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
 )
 
 var warningFunc = color.New(color.FgYellow).SprintFunc()
@@ -14,7 +15,7 @@ var debugFunc = color.New(color.FgHiCyan).SprintFunc()
 var infoFunc = color.New(color.FgHiGreen).SprintFunc()
 
 var mb *mpb.Progress
-var bar *mpb.Bar
+var Bar *mpb.Bar
 
 func NotifyMsg(level string, msg string) {
 	if level == "warning" {
@@ -33,6 +34,30 @@ func NotifyMsg(level string, msg string) {
 	mb.Write([]byte(fmt.Sprintln(level+":", msg)))
 }
 
-func notifyDone(done int, total int, col string) {
-	// Send message to daemon
+func StartBar(schemaName string, count int64) {
+	if Bar != nil {
+		Bar.Abort(true)
+		Bar.Wait()
+		mb.Wait()
+	}
+
+	mb = mpb.New(mpb.WithWidth(64))
+
+	Bar = mb.New(
+		count,
+		// BarFillerBuilder with custom style
+		mpb.BarStyle(),
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name(schemaName, decor.WC{W: len(schemaName) + 1, C: decor.DidentRight}),
+			// replace ETA decorator with "done" message, OnComplete event
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
+			),
+		),
+		mpb.AppendDecorators(decor.Percentage()),
+		mpb.BarRemoveOnComplete(),
+	)
+
+	Bar.SetCurrent(0)
 }

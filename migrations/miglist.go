@@ -3,7 +3,6 @@ package migrations
 
 import (
 	"context"
-	"fmt"
 	"hepatitis-antiviral/cli"
 	"strings"
 	"time"
@@ -22,7 +21,7 @@ var miglist = []migrator{
 			}
 
 			if colExists(ctx, pool, "bots", "extra_links") && !colExists(ctx, pool, "bots", "support") {
-				fmt.Println("Nothing to do")
+				cli.NotifyMsg("info", "Nothing to do")
 				return
 			}
 
@@ -104,7 +103,7 @@ func parseLink(key string, link string) string {
 		return link
 	}
 
-	fmt.Println("Invalid URL found:", link)
+	cli.NotifyMsg("info", "Possibly Invalid URL found: "+link)
 
 	if key == "Support" && !strings.Contains(link, " ") {
 		link = strings.Replace(link, "www", "", 1)
@@ -117,7 +116,7 @@ func parseLink(key string, link string) string {
 		} else {
 			link = "https://discord.gg/" + link
 		}
-		fmt.Println("HOTFIX: Fixed support link to", link)
+		cli.NotifyMsg("info", "Succesfully fixed support link to"+link)
 		return link
 	} else {
 		// But wait, it may be safe still
@@ -133,15 +132,15 @@ func parseLink(key string, link string) string {
 			"dev",
 			"xyz",
 		}, tldLst[len(tldLst)-1])) {
-			fmt.Println("Fixed found URL link to", "https://"+link)
+			cli.NotifyMsg("info", "Fixed found URL link to https://"+link)
 			return "https://" + link
 		} else {
 			if strings.HasPrefix(link, "https://") {
 				return link
 			}
 
-			cli.NotifyMsg("warn", "Removing invalid link: "+link)
-			time.Sleep(5 * time.Second)
+			cli.NotifyMsg("warning", "Removing invalid link: "+link)
+			time.Sleep(1 * time.Second)
 			return ""
 		}
 	}
@@ -185,14 +184,14 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 
 			// Internal links are not validated
 			if strings.HasPrefix(k, "_") {
-				fmt.Println("Internal link found, skipping validation")
+				cli.NotifyMsg("debug", "Internal link found, skipping validation")
 				continue
 			}
 
 			// Validate URL
 			links[k] = parseLink(k, links[k])
 
-			fmt.Println("Parsed link for", k, "is", links[k])
+			cli.NotifyMsg("debug", "Parsed link for "+k+" is "+links[k])
 
 			if links[k] == "" {
 				delete(links, k)

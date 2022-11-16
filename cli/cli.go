@@ -20,6 +20,8 @@ var (
 	Pool       *pgxpool.Pool
 	backupList []string
 	tagCache   map[string][2][]string = make(map[string][2][]string)
+
+	Map map[string]any
 )
 
 type ExportedFunction struct {
@@ -290,6 +292,8 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 	NotifyMsg("info", "Backing up "+schemaName)
 	for _, result := range data {
 		counter++
+
+		Map = result
 
 		bar.Increment()
 

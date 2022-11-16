@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -34,7 +33,6 @@ type UUID = string
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
 	ClientID         string    `bson:"clientID,omitempty" json:"client_id" default:"null"` // Its only nullable for now
-	Name             string    `bson:"botName" json:"name" unique:"true" pre:"updname"`
 	Avatar           string    `bson:"avatar" json:"avatar" defaultfunc:"getbotavatar"`
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
@@ -62,7 +60,7 @@ type Bot struct {
 	Banner           *string   `bson:"background,omitempty" json:"banner" default:"null"`
 	Invite           *string   `bson:"invite" json:"invite" default:"null"`
 	Type             string    `bson:"type" json:"type"`
-	Vanity           *string   `bson:"vanity,omitempty" json:"vanity" default:"null"`
+	Vanity           *string   `bson:"vanity" json:"vanity" pre:"updname"`
 	ExternalSource   string    `bson:"external_source,omitempty" json:"external_source" default:"null"`
 	ListSource       string    `bson:"listSource,omitempty" json:"list_source" mark:"uuid" default:"null"`
 	VoteBanned       bool      `bson:"vote_banned,omitempty" json:"vote_banned" default:"false" notnull:"true"`
@@ -348,25 +346,50 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 		},
 	},
 	"updname": {
-		Param: "botName",
+		Param: "vanity",
 		Function: func(p any) any {
+			if p == nil {
+				cli.NotifyMsg("info", "Got nil name, trying mongo")
+
+				// Check if name is defined on mongo
+				name := source.Conn.Database("infinity").Collection("bots").FindOne(ctx, bson.M{"botID": cli.Map["botID"]})
+
+				if name.Err() != nil {
+					panic(name.Err())
+				}
+
+				var bot bson.M
+
+				name.Decode(&bot)
+
+				if v, ok := bot["botName"]; ok {
+					if v, ok := v.(string); ok {
+						vanity := strings.ToLower(strings.ReplaceAll(v, " ", "-"))
+						cli.NotifyMsg("info", "Got name from mongo: "+vanity)
+						p = vanity
+					}
+				} else {
+					return RandString(8)
+				}
+			}
+
 			name := p.(string)
 
 			if name == "" {
 				return "unknown-" + RandString(17)
 			}
 
-			// Check if already in db
+			// Check if vanity is taken
 			var count int64
 
-			err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots WHERE name = $1", name).Scan(&count)
+			err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots WHERE vanity = $1", strings.ToLower(name)).Scan(&count)
 
 			if err != nil {
 				panic(err)
 			}
 
 			if count != 0 {
-				return name + "-" + strconv.FormatInt(count, 10)
+				return name + "-" + RandString(12)
 			}
 
 			return name

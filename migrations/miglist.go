@@ -118,6 +118,12 @@ var miglist = []migrator{
 				}
 			}
 
+			_, err = pool.Exec(ctx, "ALTER TABLE users DROP COLUMN github, DROP COLUMN website")
+
+			if err != nil {
+				panic(err)
+			}
+
 			XSSCheckUser(ctx, pool)
 		},
 	},

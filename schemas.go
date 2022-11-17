@@ -113,8 +113,6 @@ type OnboardData struct {
 type User struct {
 	UserID                    string         `bson:"userID" json:"user_id" unique:"true" default:"SKIP" pre:"usertrim"`
 	Username                  string         `bson:"username" json:"username" defaultfunc:"getuser" default:"User"`
-	Votes                     map[string]any `bson:"votes" json:"votes" default:"{}"`
-	PackVotes                 map[string]any `bson:"pack_votes" json:"pack_votes" default:"{}"`
 	StaffOnboarded            bool           `bson:"staff_onboarded" json:"staff_onboarded" default:"false"`
 	StaffOnboardState         string         `bson:"staff_onboard_state" json:"staff_onboard_state" default:"'pending'"`
 	StaffOnboardLastStartTime time.Time      `bson:"staff_onboard_last_start_time,omitempty" json:"staff_onboard_last_start_time" default:"null"`
@@ -156,13 +154,19 @@ type Votes struct {
 	Date   time.Time `bson:"date" json:"date" default:"NOW()"`
 }
 
+type PackVotes struct {
+	UserID string    `bson:"userID" json:"user_id" fkey:"users,user_id"`
+	URL    string    `bson:"url" json:"url" fkey:"packs,url"`
+	Upvote bool      `bson:"upvote" json:"upvote"`
+	Date   time.Time `bson:"date" json:"date" default:"NOW()"`
+}
+
 type Packs struct {
 	Owner   string    `bson:"owner" json:"owner" fkey:"users,user_id"`
 	Name    string    `bson:"name" json:"name" default:"'My pack'"`
 	Short   string    `bson:"short" json:"short"`
-	Votes   int64     `bson:"votes" json:"votes"`
 	TagsRaw string    `bson:"tags" json:"tags" tolist:"true"`
-	URL     string    `bson:"url" json:"url"`
+	URL     string    `bson:"url" json:"url" unique:"true"`
 	Date    time.Time `bson:"date" json:"date" default:"NOW()"`
 	Bots    []string  `bson:"bots" json:"bots" tolist:"true"`
 }
@@ -474,6 +478,10 @@ func main() {
 			})
 
 			cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
+
+			cli.BackupTool(source, "pack_votes", PackVotes{}, cli.BackupOpts{
 				ExportedFuncs: exportedFuncs,
 			})
 

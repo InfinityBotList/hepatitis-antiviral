@@ -44,7 +44,7 @@ type Bot struct {
 	StaffBot         bool      `bson:"staff" json:"staff_bot" default:"false"`
 	Short            string    `bson:"short" json:"short"`
 	Long             string    `bson:"long" json:"long"`
-	Library          *string   `bson:"library,omitempty" json:"library" default:"null"`
+	Library          *string   `bson:"library" json:"library" default:"'custom'"`
 	Website          *string   `bson:"website,omitempty" json:"website" default:"null"`
 	Donate           *string   `bson:"donate,omitempty" json:"donate" default:"null"`
 	Support          *string   `bson:"support,omitempty" json:"support" default:"null"`

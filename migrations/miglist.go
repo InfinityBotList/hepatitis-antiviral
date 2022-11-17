@@ -14,24 +14,8 @@ import (
 
 var miglist = []migrator{
 	{
-		name: "add_extra_links",
+		name: "add_extra_links bots",
 		fn: func(ctx context.Context, pool *pgxpool.Pool) {
-			if !tableExists(ctx, pool, "bots") {
-				panic("required table bots does not exist")
-			}
-
-			if colExists(ctx, pool, "bots", "extra_links") && !colExists(ctx, pool, "bots", "support") {
-				cli.NotifyMsg("info", "Nothing to do")
-				return
-			}
-
-			if colExists(ctx, pool, "bots", "extra_links") {
-				_, err := pool.Exec(ctx, "ALTER TABLE bots DROP COLUMN extra_links")
-				if err != nil {
-					panic(err)
-				}
-			}
-
 			_, err := pool.Exec(ctx, "ALTER TABLE bots ADD COLUMN extra_links jsonb NOT NULL DEFAULT '{}'")
 			if err != nil {
 				panic(err)
@@ -88,6 +72,53 @@ var miglist = []migrator{
 			}
 
 			XSSCheck(ctx, pool)
+		},
+	},
+	{
+		name: "add_extra_links users",
+		fn: func(ctx context.Context, pool *pgxpool.Pool) {
+			_, err := pool.Exec(ctx, "ALTER TABLE users ADD COLUMN extra_links jsonb NOT NULL DEFAULT '{}'")
+			if err != nil {
+				panic(err)
+			}
+
+			// get every website and github link
+			rows, err := pool.Query(ctx, "SELECT user_id, website, github FROM users")
+
+			if err != nil {
+				panic(err)
+			}
+
+			defer rows.Close()
+
+			for rows.Next() {
+				var userID pgtype.Text
+				var website, github pgtype.Text
+
+				err = rows.Scan(&userID, &website, &github)
+
+				if err != nil {
+					panic(err)
+				}
+
+				var cols = make(map[string]string)
+
+				if !isNone(website) {
+					cols["Website"] = website.String
+				}
+
+				if !isNone(github) {
+					cols["Github"] = github.String
+				}
+
+				_, err = pool.Exec(ctx, "UPDATE users SET extra_links = $1 WHERE user_id = $2", cols, userID.String)
+
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			XSSCheckUser(ctx, pool)
 		},
 	},
 }
@@ -199,6 +230,66 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 		}
 
 		_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1 WHERE bot_id = $2", links, botID.String)
+
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
+	// get every extra_link
+	rows, err := pool.Query(ctx, "SELECT user_id, extra_links FROM users")
+
+	if err != nil {
+		panic(err)
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var userID pgtype.Text
+
+		var extraLinks pgtype.JSONB
+
+		err = rows.Scan(&userID, &extraLinks)
+
+		if err != nil {
+			panic(err)
+		}
+
+		var links map[string]string
+
+		err = extraLinks.AssignTo(&links)
+
+		if err != nil {
+			panic(err)
+		}
+
+		for k := range links {
+			if links[k] == "" {
+				delete(links, k)
+			}
+
+			links[k] = strings.Trim(links[k], " ")
+
+			// Internal links are not validated
+			if strings.HasPrefix(k, "_") {
+				cli.NotifyMsg("debug", "Internal link found, skipping validation")
+				continue
+			}
+
+			// Validate URL
+			links[k] = parseLink(k, links[k])
+
+			cli.NotifyMsg("debug", "Parsed link for "+k+" is "+links[k])
+
+			if links[k] == "" {
+				delete(links, k)
+			}
+		}
+
+		_, err = pool.Exec(ctx, "UPDATE users SET extra_links = $1 WHERE user_id = $2", links, userID.String)
 
 		if err != nil {
 			panic(err)

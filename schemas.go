@@ -207,7 +207,7 @@ type Alerts struct {
 }
 
 type Poppypaw struct {
-	UserID    string    `bson:"id" json:"id" fkey:"users,user_id"`
+	UserID    string    `bson:"id" json:"user_id" fkey:"users,user_id"`
 	NotifID   string    `bson:"notifId" json:"notif_id"`
 	Auth      string    `bson:"auth" json:"auth"`
 	P256dh    string    `bson:"p256dh" json:"p256dh"`

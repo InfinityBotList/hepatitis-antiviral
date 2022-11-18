@@ -58,4 +58,8 @@ COMMENT ON SCHEMA public IS 'standard public schema'`)
 	}
 
 	app.BackupFunc()
+
+	Bar.Abort(true)
+
+	Bar.Wait()
 }

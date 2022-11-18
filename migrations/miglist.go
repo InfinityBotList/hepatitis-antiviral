@@ -12,6 +12,11 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type link struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 var miglist = []migrator{
 	{
 		name: "add_extra_links bots",
@@ -40,22 +45,34 @@ var miglist = []migrator{
 					panic(err)
 				}
 
-				var cols = make(map[string]string)
+				var cols = []link{}
 
 				if !isNone(website) {
-					cols["Website"] = website.String
+					cols = append(cols, link{
+						Name:  "Website",
+						Value: website.String,
+					})
 				}
 
 				if !isNone(support) {
-					cols["Support"] = support.String
+					cols = append(cols, link{
+						Name:  "Support",
+						Value: support.String,
+					})
 				}
 
 				if !isNone(github) {
-					cols["Github"] = github.String
+					cols = append(cols, link{
+						Name:  "GitHub",
+						Value: github.String,
+					})
 				}
 
 				if !isNone(donate) {
-					cols["Donate"] = donate.String
+					cols = append(cols, link{
+						Name:  "Donate",
+						Value: donate.String,
+					})
 				}
 
 				_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1 WHERE bot_id = $2", cols, botID.String)
@@ -101,14 +118,20 @@ var miglist = []migrator{
 					panic(err)
 				}
 
-				var cols = make(map[string]string)
+				var cols = []link{}
 
 				if !isNone(website) {
-					cols["Website"] = website.String
+					cols = append(cols, link{
+						Name:  "Website",
+						Value: website.String,
+					})
 				}
 
 				if !isNone(github) {
-					cols["Github"] = github.String
+					cols = append(cols, link{
+						Name:  "GitHub",
+						Value: github.String,
+					})
 				}
 
 				_, err = pool.Exec(ctx, "UPDATE users SET extra_links = $1 WHERE user_id = $2", cols, userID.String)
@@ -204,7 +227,7 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
-		var links map[string]string
+		var links []link
 
 		err = extraLinks.AssignTo(&links)
 
@@ -212,30 +235,33 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
+		var parsedLinks []link
+
 		for k := range links {
-			if links[k] == "" {
-				delete(links, k)
+			if links[k].Value == "" {
+				continue
 			}
 
-			links[k] = strings.Trim(links[k], " ")
+			links[k].Value = strings.Trim(links[k].Value, " ")
 
 			// Internal links are not validated
-			if strings.HasPrefix(k, "_") {
+			if strings.HasPrefix(links[k].Value, "_") {
 				cli.NotifyMsg("debug", "Internal link found, skipping validation")
 				continue
 			}
 
 			// Validate URL
-			links[k] = parseLink(k, links[k])
+			value := parseLink(links[k].Name, links[k].Value)
 
-			cli.NotifyMsg("debug", "Parsed link for "+k+" is "+links[k])
+			cli.NotifyMsg("debug", "Parsed link for "+links[k].Name+" is "+value)
 
-			if links[k] == "" {
-				delete(links, k)
-			}
+			parsedLinks = append(parsedLinks, link{
+				Name:  links[k].Name,
+				Value: value,
+			})
 		}
 
-		_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1 WHERE bot_id = $2", links, botID.String)
+		_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1 WHERE bot_id = $2", parsedLinks, botID.String)
 
 		if err != nil {
 			panic(err)
@@ -264,7 +290,7 @@ func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
-		var links map[string]string
+		var links []link
 
 		err = extraLinks.AssignTo(&links)
 
@@ -272,30 +298,33 @@ func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
+		var parsedLinks []link
+
 		for k := range links {
-			if links[k] == "" {
-				delete(links, k)
+			if links[k].Value == "" {
+				continue
 			}
 
-			links[k] = strings.Trim(links[k], " ")
+			links[k].Value = strings.Trim(links[k].Value, " ")
 
 			// Internal links are not validated
-			if strings.HasPrefix(k, "_") {
+			if strings.HasPrefix(links[k].Value, "_") {
 				cli.NotifyMsg("debug", "Internal link found, skipping validation")
 				continue
 			}
 
 			// Validate URL
-			links[k] = parseLink(k, links[k])
+			value := parseLink(links[k].Name, links[k].Value)
 
-			cli.NotifyMsg("debug", "Parsed link for "+k+" is "+links[k])
+			cli.NotifyMsg("debug", "Parsed link for "+links[k].Name+" is "+value)
 
-			if links[k] == "" {
-				delete(links, k)
-			}
+			parsedLinks = append(parsedLinks, link{
+				Name:  links[k].Name,
+				Value: value,
+			})
 		}
 
-		_, err = pool.Exec(ctx, "UPDATE users SET extra_links = $1 WHERE user_id = $2", links, userID.String)
+		_, err = pool.Exec(ctx, "UPDATE users SET extra_links = $1 WHERE user_id = $2", parsedLinks, userID.String)
 
 		if err != nil {
 			panic(err)

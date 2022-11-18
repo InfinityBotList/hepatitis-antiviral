@@ -74,9 +74,8 @@ type Bot struct {
 	ClaimedBy        string    `bson:"claimedBy,omitempty" json:"claimed_by" default:"null"`
 	Note             string    `bson:"note,omitempty" json:"approval_note" default:"'No note'"`
 	Date             time.Time `bson:"date,omitempty" json:"date" default:"NOW()" notnull:"true"`
-	Webhook          *string   `bson:"webhook,omitempty" json:"webhook" default:"null"` // Discord
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
-	WebURL           *string   `bson:"webURL,omitempty" json:"custom_webhook" default:"null"`
+	WebURL           *string   `bson:"webURL,omitempty" json:"webhook" default:"null"`
 	WebHMac          *bool     `bson:"webHMac,omitempty" json:"hmac" default:"false"`
 	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
 	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`

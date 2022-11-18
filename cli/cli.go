@@ -259,9 +259,12 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 
 	var counter int
 
-	StartBar(schemaName, count)
-	NotifyMsg("info", "Backing up "+schemaName)
+	StartBar(schemaName, count, true)
 	for _, result := range data {
+		if counter == 0 {
+			NotifyMsg("info", "Backing up "+schemaName)
+		}
+
 		counter++
 
 		Map = result
@@ -353,7 +356,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 						if input == "SKIP" {
 							flag = false
 							skipped = true
-							StartBar(schemaName, count)
+							StartBar(schemaName, count, true)
 							continue
 						}
 
@@ -363,7 +366,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 							fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
 							var confirm string
 							fmt.Scanln(&confirm)
-							StartBar(schemaName, count)
+							StartBar(schemaName, count, true)
 							if confirm == "y" {
 								flag = false
 							}

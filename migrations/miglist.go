@@ -33,9 +33,22 @@ var miglist = []migrator{
 				panic(err)
 			}
 
+			// get count of rows
+			var count int64
+
+			err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots").Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			migBar := cli.StartBar("bot migration", count, false)
+
 			defer rows.Close()
 
 			for rows.Next() {
+				migBar.Increment()
+
 				var botID pgtype.Text
 				var website, support, github, donate pgtype.Text
 
@@ -106,9 +119,22 @@ var miglist = []migrator{
 				panic(err)
 			}
 
+			// get count of rows
+			var count int64
+
+			err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			migBar := cli.StartBar("user migration", count, false)
+
 			defer rows.Close()
 
 			for rows.Next() {
+				migBar.Increment()
+
 				var userID pgtype.Text
 				var website, github pgtype.Text
 
@@ -207,6 +233,17 @@ func parseLink(key string, link string) string {
 }
 
 func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
+	// get count of rows
+	var count int64
+
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots").Scan(&count)
+
+	if err != nil {
+		panic(err)
+	}
+
+	xssBar := cli.StartBar("XSS Check (bots)", count, false)
+
 	// get every extra_link
 	rows, err := pool.Query(ctx, "SELECT bot_id, extra_links FROM bots")
 
@@ -217,6 +254,8 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 	defer rows.Close()
 
 	for rows.Next() {
+		xssBar.Increment()
+
 		var botID pgtype.Text
 
 		var extraLinks pgtype.JSONB
@@ -270,6 +309,17 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 }
 
 func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
+	// get count of rows
+	var count int64
+
+	err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users").Scan(&count)
+
+	if err != nil {
+		panic(err)
+	}
+
+	xssBar := cli.StartBar("XSS Check (users)", count, false)
+
 	// get every extra_link
 	rows, err := pool.Query(ctx, "SELECT user_id, extra_links FROM users")
 
@@ -280,6 +330,8 @@ func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
 	defer rows.Close()
 
 	for rows.Next() {
+		xssBar.Increment()
+
 		var userID pgtype.Text
 
 		var extraLinks pgtype.JSONB

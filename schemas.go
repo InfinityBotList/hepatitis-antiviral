@@ -12,9 +12,9 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson"
 )
 
 var ctx = context.Background()
@@ -26,11 +26,6 @@ var ctx = context.Background()
 // Tool below
 
 var source mongo.MongoSource
-
-type Auth struct {
-	ID    *string `bson:"id,omitempty" json:"id" notnull:"true"`
-	Token string  `bson:"token" json:"token" notnull:"true"`
-}
 
 type UUID = string
 
@@ -125,7 +120,6 @@ type User struct {
 	IBLDev                    bool           `bson:"ibldev" json:"ibldev" default:"false"`
 	IBLHDev                   bool           `bson:"iblhdev" json:"iblhdev" default:"false"`
 	Developer                 bool           `bson:"developer" json:"developer" default:"false"`
-	Notifications             bool           `bson:"notifications" json:"notifications" default:"false"`
 	Website                   *string        `bson:"website,omitempty" json:"website" default:"null"`
 	Github                    *string        `bson:"github,omitempty" json:"github" default:"null"`
 	Nickname                  *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
@@ -205,7 +199,7 @@ type Transcripts struct {
 	OpenedBy map[string]any `bson:"openedBy" json:"opened_by" default:"{}"`
 }
 
-type Notifications struct {
+type Alerts struct {
 	UserID  string `bson:"userID" json:"user_id" fkey:"users,user_id"`
 	URL     string `bson:"url" json:"url"`
 	Message string `bson:"message" json:"message"`
@@ -304,34 +298,22 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 		Param: "vanity",
 		Function: func(p any) any {
 			if p == nil {
-				cli.NotifyMsg("info", "Got nil name, trying mongo")
-
-				// Check if name is defined on mongo
-				name := source.Conn.Database("infinity").Collection("bots").FindOne(ctx, bson.M{"botID": cli.Map["botID"]})
-
-				if name.Err() != nil {
-					panic(name.Err())
-				}
-
-				var bot bson.M
-
-				name.Decode(&bot)
-
-				if v, ok := bot["botName"]; ok {
-					if v, ok := v.(string); ok {
-						vanity := strings.ToLower(strings.ReplaceAll(v, " ", "-"))
-						cli.NotifyMsg("info", "Got name from mongo: "+vanity)
-						p = vanity
-					}
-				} else {
-					return "unknown-" + RandString(12)
-				}
+				cli.NotifyMsg("error", "Got nil name for current context: "+fmt.Sprint(cli.Map["botID"]))
+				panic("Got nil name")
 			}
 
 			name := p.(string)
 
+			// Strip out unicode characters
+			name = strings.Map(func(r rune) rune {
+				if r > unicode.MaxASCII {
+					return -1
+				}
+				return r
+			}, name)
+
 			if name == "" {
-				return "unknown-" + RandString(12)
+				panic("Got empty name")
 			}
 
 			// Check if vanity is taken
@@ -389,8 +371,6 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 				return nil
 			}
 
-			// Update mongodb with the username and avatar
-			source.Conn.Database("infinity").Collection("users").UpdateOne(ctx, bson.M{"userID": userId}, bson.M{"$set": bson.M{"username": data.Username}})
 			return data.Username
 		},
 	},
@@ -415,9 +395,6 @@ func main() {
 				panic(err)
 			}
 
-			cli.BackupTool(source, "oauths", Auth{}, cli.BackupOpts{
-				ExportedFuncs: exportedFuncs,
-			})
 			cli.BackupTool(source, "users", User{}, cli.BackupOpts{
 				IgnoreFKError:     true,
 				IgnoreUniqueError: true,
@@ -465,7 +442,7 @@ func main() {
 				ExportedFuncs: exportedFuncs,
 			})
 
-			cli.BackupTool(source, "notifications", Notifications{}, cli.BackupOpts{
+			cli.BackupTool(source, "alerts", Alerts{}, cli.BackupOpts{
 				ExportedFuncs: exportedFuncs,
 			})
 

@@ -9,7 +9,7 @@ import (
 )
 
 func Migrate(ctx context.Context, pool *pgxpool.Pool) {
-	cli.StartBar("migrations", int64(len(miglist))+1)
+	cli.StartBar("migrations", int64(len(miglist))+1, true)
 	for i, m := range miglist {
 		cli.Bar.Increment()
 		cli.NotifyMsg("info", "Running migration ["+strconv.Itoa(i)+"/"+strconv.Itoa(len(miglist))+"] "+m.name)
@@ -17,5 +17,5 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) {
 		m.fn(ctx, pool)
 	}
 
-	cli.Bar.SetCurrent(int64(len(miglist)) + 1)
+	cli.Bar.Abort(true)
 }

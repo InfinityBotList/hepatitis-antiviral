@@ -34,16 +34,18 @@ func NotifyMsg(level string, msg string) {
 	mb.Write([]byte(fmt.Sprintln(level+":", msg)))
 }
 
-func StartBar(schemaName string, count int64) {
-	if Bar != nil {
+func StartBar(schemaName string, count int64, removeOld bool) (b *mpb.Bar) {
+	if Bar != nil && removeOld {
 		Bar.Abort(true)
 		Bar.Wait()
 		mb.Wait()
 	}
 
-	mb = mpb.New(mpb.WithWidth(64))
+	if removeOld {
+		mb = mpb.New(mpb.WithWidth(64))
+	}
 
-	Bar = mb.New(
+	bar := mb.New(
 		count,
 		// BarFillerBuilder with custom style
 		mpb.BarStyle(),
@@ -55,9 +57,20 @@ func StartBar(schemaName string, count int64) {
 				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
 			),
 		),
-		mpb.AppendDecorators(decor.Percentage()),
+		mpb.AppendDecorators(
+			// Percentage decorator with width reservation and no extra space
+			decor.Percentage(),
+			// Set a counter at the end of the bar
+			decor.Counters(0, " [%d/%d]", decor.WC{W: len(schemaName) + 1, C: decor.DidentRight}),
+		),
 		mpb.BarRemoveOnComplete(),
 	)
 
-	Bar.SetCurrent(0)
+	bar.SetCurrent(0)
+
+	if removeOld {
+		Bar = bar
+	}
+
+	return bar
 }

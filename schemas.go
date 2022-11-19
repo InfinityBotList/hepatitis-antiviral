@@ -121,7 +121,6 @@ type User struct {
 	Developer                 bool           `bson:"developer" json:"developer" default:"false"`
 	Website                   *string        `bson:"website,omitempty" json:"website" default:"null"`
 	Github                    *string        `bson:"github,omitempty" json:"github" default:"null"`
-	Nickname                  *string        `bson:"nickname,omitempty" json:"nickname" default:"null"`
 	APIToken                  string         `bson:"apiToken" json:"api_token" defaultfunc:"gentoken"`
 	About                     *string        `bson:"about,omitempty" json:"about" default:"'I am a very mysterious person'"`
 	VoteBanned                bool           `bson:"vote_banned,omitempty" json:"vote_banned" default:"false"`

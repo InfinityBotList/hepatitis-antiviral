@@ -6,8 +6,6 @@ package cli
 
 import (
 	"fmt"
-
-	"github.com/vbauerster/mpb/v8"
 )
 
 type BackupSource interface {
@@ -27,9 +25,9 @@ type BackupLocation interface {
 }
 
 func Backup(src BackupSource, recv BackupLocation) {
-	if Bar == nil {
+	/*if Bar == nil {
 		mb = mpb.New(mpb.WithWidth(64))
-	}
+	}*/
 
 	recordList, err := src.RecordList()
 
@@ -55,9 +53,9 @@ func Backup(src BackupSource, recv BackupLocation) {
 			return
 		}
 
-		bar := StartBar(entity, int64(len(records)), true)
+		//bar := StartBar(entity, int64(len(records)), true)
 		for _, record := range records {
-			bar.Increment()
+			//bar.Increment()
 			err := recv.BackupRecord(entity, record)
 
 			if err != nil {

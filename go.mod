@@ -14,6 +14,7 @@ require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/jackc/puddle/v2 v2.1.2 // indirect
 	github.com/kless/term v0.0.0-20161130133337-e551c64f56c0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
@@ -25,6 +26,7 @@ require (
 	github.com/sethgrid/multibar v0.0.0-20160417171508-4bf4cf7b87d6 // indirect
 	github.com/tredoe/term v0.0.0-20161130133337-e551c64f56c0 // indirect
 	github.com/vbauerster/mpb/v8 v8.1.4 // indirect
+	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/term v0.2.0 // indirect
 )
@@ -32,6 +34,7 @@ require (
 require (
 	github.com/cheggaaa/pb/v3 v3.1.0
 	github.com/georgysavva/scany v1.2.1
+	github.com/georgysavva/scany/v2 v2.0.0
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0
@@ -44,9 +47,11 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.12.0 // indirect
 	github.com/jackc/pgx/v4 v4.17.2
-	github.com/jackc/pgx/v5 v5.0.0-alpha.3 // indirect
+	github.com/jackc/pgx/v5 v5.1.1 // indirect
 	github.com/jackc/puddle v1.3.0 // indirect
+	github.com/jmoiron/sqlx v1.3.5
 	github.com/klauspost/compress v1.15.12 // indirect
+	github.com/lib/pq v1.10.7
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

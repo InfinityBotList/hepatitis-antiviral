@@ -213,7 +213,7 @@ var miglist = []migrator{
 					panic(err)
 				}
 
-				var uniqueClicksHashed []string
+				var uniqueClicksHashed []string = make([]string, len(uniqueClicks))
 
 				for _, v := range uniqueClicks {
 					sha_512 := sha512.New()

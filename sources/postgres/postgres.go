@@ -5,8 +5,8 @@ package postgres
 import (
 	"context"
 
-	"github.com/georgysavva/scany/pgxscan"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type PostgresStore struct {
@@ -16,7 +16,7 @@ type PostgresStore struct {
 
 func (m *PostgresStore) Connect() error {
 	// Connect to postgres
-	conn, err := pgxpool.Connect(context.Background(), m.URL)
+	conn, err := pgxpool.New(context.Background(), m.URL)
 
 	if err != nil {
 		return err
@@ -41,6 +41,8 @@ func (m PostgresStore) GetRecords(entity string) ([]map[string]any, error) {
 		return nil, err
 	}
 
+	rows.Close()
+
 	return records, nil
 }
 
@@ -57,18 +59,25 @@ func (m PostgresStore) GetCount(entity string) (int64, error) {
 }
 
 func (m PostgresStore) RecordList() ([]string, error) {
-	var records []string
-
 	rows, err := m.conn.Query(context.Background(), "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'")
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = pgxscan.ScanAll(&records, rows)
+	defer rows.Close()
 
-	if err != nil {
-		return nil, err
+	var records []string
+
+	for rows.Next() {
+		var record string
+		err := rows.Scan(&record)
+
+		if err != nil {
+			return nil, err
+		}
+
+		records = append(records, record)
 	}
 
 	return records, nil

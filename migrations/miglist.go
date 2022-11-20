@@ -5,12 +5,11 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/hex"
-	"fmt"
 	"hepatitis-antiviral/cli"
 	"strings"
 
 	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/exp/slices"
 )
 
@@ -227,8 +226,6 @@ var miglist = []migrator{
 					uniqueClicksHashed = append(uniqueClicksHashed, hexedSum)
 				}
 
-				cli.NotifyMsg("info", fmt.Sprint(uniqueClicksHashed))
-
 				_, err = pool.Exec(ctx, "UPDATE bots SET unique_clicks = $1 WHERE bot_id = $2", uniqueClicksHashed, botID.String)
 
 				if err != nil {
@@ -334,7 +331,7 @@ func XSSCheck(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
-		var parsedLinks []link
+		var parsedLinks = []link{}
 
 		for k := range links {
 			if links[k].Value == "" {
@@ -410,7 +407,7 @@ func XSSCheckUser(ctx context.Context, pool *pgxpool.Pool) {
 			panic(err)
 		}
 
-		var parsedLinks []link
+		var parsedLinks = []link{}
 
 		for k := range links {
 			if links[k].Value == "" {

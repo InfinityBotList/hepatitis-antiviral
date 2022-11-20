@@ -4,6 +4,7 @@ package mongo
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -108,18 +109,52 @@ func (m MongoSource) ExtParse(res any) (any, error) {
 	if resCast, ok := res.(primitive.DateTime); ok {
 		result = time.UnixMilli(resCast.Time().UnixMilli())
 	} else if resCast, ok := res.(primitive.A); ok {
-		// For each int64 in the array, convert to time.Time
-		resV := make([]time.Time, len(resCast))
-		for i, v := range resCast {
-			if val, ok := v.(int64); ok {
-				resV[i] = time.UnixMilli(val)
-			} else if val, ok := v.(float64); ok {
-				resV[i] = time.UnixMilli(int64(val))
+		if len(resCast) > 0 {
+			// We can try doing some smart type inference here
+			switch resCast[0].(type) {
+			case primitive.DateTime:
+				var resultV = []time.Time{}
+
+				for _, v := range resCast {
+					resultV = append(resultV, v.(primitive.DateTime).Time())
+				}
+
+				result = resultV
+				return result, nil
+			case int64:
+				var resultV = []int64{}
+
+				for _, v := range resCast {
+					resultV = append(resultV, v.(int64))
+				}
+
+				result = resultV
+				return result, nil
+			case float64:
+				var resultV = []float64{}
+
+				for _, v := range resCast {
+					resultV = append(resultV, v.(float64))
+				}
+
+				result = resultV
+				return result, nil
 			}
 		}
-		result = resV
+
+		// Fallback to string
+		if resCast == nil {
+			result = []string{}
+		}
+
+		var resultArr = []string{}
+		for _, v := range resCast {
+			resultArr = append(resultArr, fmt.Sprint(v))
+		}
+
+		result = resultArr
 	} else {
-		return nil, errors.New("no external representation for type")
+		return result, errors.New("no external representation for type")
 	}
 	return result, nil
 }

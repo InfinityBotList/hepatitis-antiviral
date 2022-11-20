@@ -4,14 +4,14 @@
   Calypso
 </h2>
 <p align="center">
- Simple Tool for Migrating Mongoose Data/Collections to Postgres
+ Simple Tool for Migrating Data From Any Database to Postgres
 </p>
 
 <hr>
 
 ## You should be able to rawly plugin your Go structs to this tool
 
-The ``bson`` and ``json`` struct tags define the mongoDB column name (bson) and the postgres end name (json) respectively.
+The ``bson`` and ``json`` struct tags define the db column name (``bson`` for historical reasons) and the postgres end name (json) respectively.
 
 A primary key of ``itag`` is created to identify each element uniquely.
 
@@ -49,3 +49,12 @@ PackVotes                 map[string]any `bson:"pack_votes" json:"pack_votes" de
 2. If you wish to add any migrations, add them to ``migrations/miglist.go``
 3. Do ``go build`` to build the tool
 4. Run ``hepatitis-antiviral`` 
+
+## Sources
+
+Some db sources are implemented by default:
+
+- ``mongo`` -> MongoDB
+- ``jsonfile`` -> JSON File
+
+``postgres`` as a data source is only implemented as a ``backup`` source at this time. This means it can only be used with the WIP backup feature (seperate from the main features of this tool).

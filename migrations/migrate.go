@@ -5,7 +5,7 @@ import (
 	"hepatitis-antiviral/cli"
 	"strconv"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func Migrate(ctx context.Context, pool *pgxpool.Pool) {

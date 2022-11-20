@@ -385,6 +385,7 @@ func main() {
 		SchemaOpts: cli.SchemaOpts{
 			TableName: "infinity",
 		},
+		// Optional, experimental
 		BackupSource: func(name string) (cli.BackupSource, error) {
 			switch name {
 			case "json":
@@ -429,6 +430,7 @@ func main() {
 			}
 			return nil, errors.New("unknown source")
 		},
+		// Optional, experimental
 		BackupLocation: func(name string) (cli.BackupLocation, error) {
 			switch name {
 			case "json":
@@ -447,6 +449,7 @@ func main() {
 			}
 			return nil, errors.New("unknown location")
 		},
+		// Optional, experimental
 		LoadSource: func(name string) (cli.Source, error) {
 			switch name {
 			case "mongo":
@@ -480,12 +483,18 @@ func main() {
 
 			return nil, errors.New("unknown source")
 		},
+		// Optional, experimental
 		BackupFunc: func(source cli.Source) {
 			cli.BackupTool(source, "users", User{}, cli.BackupOpts{
 				IgnoreFKError:     true,
 				IgnoreUniqueError: true,
 				ExportedFuncs:     exportedFuncs,
 			})
+
+			cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
+				ExportedFuncs: exportedFuncs,
+			})
+
 			cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
 				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token", "lower(vanity)"},
 				ExportedFuncs: exportedFuncs,
@@ -537,10 +546,6 @@ func main() {
 			})
 
 			cli.BackupTool(source, "onboard_data", OnboardData{}, cli.BackupOpts{
-				ExportedFuncs: exportedFuncs,
-			})
-
-			cli.BackupTool(source, "apps", Apps{}, cli.BackupOpts{
 				ExportedFuncs: exportedFuncs,
 			})
 

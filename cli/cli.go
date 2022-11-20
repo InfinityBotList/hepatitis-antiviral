@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/vbauerster/mpb/v8"
 	"golang.org/x/exp/slices"
 )
@@ -419,9 +419,13 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 					} else {
 						res = time.UnixMilli(resD)
 					}
-				} else if resCast, err := source.ExtParse(res); err == nil {
-					res = resCast
 				}
+			}
+
+			result, err := source.ExtParse(res)
+
+			if err == nil {
+				res = result
 			}
 
 			// Handle tolist
@@ -464,6 +468,12 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 			}
 			NotifyMsg("error", "Error on iter "+strconv.Itoa(counter)+": "+pgerr.Error())
 			NotifyMsg("error", "Failing SQL: "+sqlStr+"\nArgs: "+fmt.Sprint(args))
+			fmt.Println("Failing SQL: ", sqlStr, args)
+			for _, arg := range args {
+				if arg != nil {
+					fmt.Println(reflect.TypeOf(arg), arg)
+				}
+			}
 			panic(pgerr)
 		}
 	}

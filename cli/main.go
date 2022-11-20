@@ -4,7 +4,7 @@ import (
 	"flag"
 	"strings"
 
-	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -77,7 +77,7 @@ func Main(app App) {
 	}
 
 	// Create postgres conn
-	Pool, err = pgxpool.Connect(ctx, "postgresql://127.0.0.1:5432/"+app.SchemaOpts.TableName+"?user=root&password=iblpublic")
+	Pool, err = pgxpool.New(ctx, "postgresql://127.0.0.1:5432/"+app.SchemaOpts.TableName+"?user=root&password=iblpublic")
 
 	if err != nil {
 		panic(err)

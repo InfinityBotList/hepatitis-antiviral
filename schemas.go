@@ -66,9 +66,9 @@ type Bot struct {
 	ExternalSource   string    `bson:"external_source,omitempty" json:"external_source" default:"null"`
 	ListSource       string    `bson:"listSource,omitempty" json:"list_source" mark:"uuid" default:"null"`
 	VoteBanned       bool      `bson:"vote_banned,omitempty" json:"vote_banned" default:"false" notnull:"true"`
-	CrossAdd         bool      `bson:"cross_add,omitempty" json:"cross_add" default:"true"`
-	StartPeriod      int64     `bson:"start_period,omitempty" json:"start_premium_period" default:"0"`
-	SubPeriod        int64     `bson:"sub_period,omitempty" json:"premium_period_length" default:"0"`
+	CrossAdd         bool      `bson:"cross_add" json:"cross_add" default:"true" notnull:"true"`
+	StartPeriod      int64     `bson:"start_period,omitempty" json:"start_premium_period" default:"0" notnull:"true"`
+	SubPeriod        int64     `bson:"sub_period,omitempty" json:"premium_period_length" default:"0" notnull:"true"`
 	CertReason       string    `bson:"cert_reason,omitempty" json:"cert_reason" default:"null"`
 	Announce         bool      `bson:"announce,omitempty" json:"announce" default:"false"`
 	AnnounceMessage  string    `bson:"announce_msg,omitempty" json:"announce_message" default:"null"`
@@ -76,7 +76,7 @@ type Bot struct {
 	TotalUptime      int64     `bson:"total_uptime,omitempty" json:"total_uptime" default:"0"`
 	Claimed          bool      `bson:"claimed,omitempty" json:"claimed" default:"false"`
 	ClaimedBy        string    `bson:"claimedBy,omitempty" json:"claimed_by" default:"null"`
-	Note             string    `bson:"note,omitempty" json:"approval_note" default:"'No note'"`
+	Note             string    `bson:"note,omitempty" json:"approval_note" default:"'No note'" notnull:"true"`
 	Date             time.Time `bson:"date,omitempty" json:"date" default:"NOW()" notnull:"true"`
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"webhook" default:"null"`

@@ -1,3 +1,4 @@
+// Implements both Source and BackupSource
 package mongo
 
 import (
@@ -9,15 +10,18 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/exp/slices"
 )
 
 var ctx = context.Background()
 
 type MongoSource struct {
-	ConnectionURL string
-	DatabaseName  string
-	Conn          *mongo.Client
-	Database      *mongo.Database
+	ConnectionURL  string
+	DatabaseName   string
+	Conn           *mongo.Client
+	Database       *mongo.Database
+	connected      bool
+	IgnoreEntities []string
 }
 
 func (m *MongoSource) Connect() error {
@@ -27,10 +31,40 @@ func (m *MongoSource) Connect() error {
 		return err
 	}
 	m.Database = m.Conn.Database(m.DatabaseName)
+	m.connected = true
 	return nil
 }
 
+func (m MongoSource) RecordList() ([]string, error) {
+	if !m.connected {
+		return nil, errors.New("not connected")
+	}
+
+	var record []string
+	cur, err := m.Database.ListCollectionNames(ctx, bson.M{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, v := range cur {
+		if !slices.Contains(m.IgnoreEntities, v) {
+			record = append(record, v)
+		}
+	}
+
+	return record, nil
+}
+
 func (m MongoSource) GetRecords(entity string) ([]map[string]any, error) {
+	if slices.Contains(m.IgnoreEntities, entity) {
+		return []map[string]any{}, nil
+	}
+
+	if !m.connected {
+		return nil, errors.New("not connected")
+	}
+
 	var record []map[string]any
 	cur, err := m.Database.Collection(entity).Find(ctx, bson.M{})
 
@@ -57,6 +91,10 @@ func (m MongoSource) GetRecords(entity string) ([]map[string]any, error) {
 }
 
 func (m MongoSource) GetCount(entity string) (int64, error) {
+	if slices.Contains(m.IgnoreEntities, entity) {
+		return 0, nil
+	}
+
 	intVal, err := m.Database.Collection(entity).CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return 0, err
@@ -64,6 +102,7 @@ func (m MongoSource) GetCount(entity string) (int64, error) {
 	return intVal, nil
 }
 
+// Special mongo specific types
 func (m MongoSource) ExtParse(res any) (any, error) {
 	var result any
 	if resCast, ok := res.(primitive.DateTime); ok {

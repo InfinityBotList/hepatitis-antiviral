@@ -16,4 +16,6 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) {
 
 		m.fn(ctx, pool)
 	}
+
+	cli.Bar.Increment()
 }

@@ -3,9 +3,11 @@ package migrations
 
 import (
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
+	"fmt"
 	"hepatitis-antiviral/cli"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -176,6 +178,65 @@ var miglist = []migrator{
 			XSSCheckUser(ctx, pool)
 		},
 	},
+	{
+		name: "hash unique_clicks (privacy)",
+		fn: func(ctx context.Context, pool *pgxpool.Pool) {
+			// get every website and github link
+			rows, err := pool.Query(ctx, "SELECT bot_id, unique_clicks FROM bots")
+
+			if err != nil {
+				panic(err)
+			}
+
+			// get count of rows
+			var count int64
+
+			err = pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots").Scan(&count)
+
+			if err != nil {
+				panic(err)
+			}
+
+			migBar := cli.StartBar("hash unique_clicks (privacy)", count, false)
+
+			defer rows.Close()
+
+			for rows.Next() {
+				migBar.Increment()
+
+				var botID pgtype.Text
+				var uniqueClicks []string
+
+				err = rows.Scan(&botID, &uniqueClicks)
+
+				if err != nil {
+					panic(err)
+				}
+
+				var uniqueClicksHashed []string
+
+				for _, v := range uniqueClicks {
+					sha_512 := sha512.New()
+
+					sha_512.Write([]byte(v))
+
+					sum := sha_512.Sum(nil)
+
+					hexedSum := hex.EncodeToString(sum)
+
+					uniqueClicksHashed = append(uniqueClicksHashed, hexedSum)
+				}
+
+				cli.NotifyMsg("info", fmt.Sprint(uniqueClicksHashed))
+
+				_, err = pool.Exec(ctx, "UPDATE bots SET unique_clicks = $1 WHERE bot_id = $2", uniqueClicksHashed, botID.String)
+
+				if err != nil {
+					panic(err)
+				}
+			}
+		},
+	},
 }
 
 // XSS Checking functions
@@ -226,7 +287,6 @@ func parseLink(key string, link string) string {
 			}
 
 			cli.NotifyMsg("warning", "Removing invalid link: "+link)
-			time.Sleep(1 * time.Second)
 			return ""
 		}
 	}

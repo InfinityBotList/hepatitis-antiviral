@@ -20,7 +20,8 @@ var (
 	backupList []string
 	tagCache   map[string][2][]string = make(map[string][2][]string)
 
-	Map map[string]any
+	Map        map[string]any
+	OnlySchema *bool
 )
 
 type ExportedFunction struct {
@@ -157,17 +158,8 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 		return
 	}
 
-	data, err := source.GetRecords(schemaName)
-
-	count, cerr := source.GetCount(schemaName)
-
-	if err != nil {
-		panic(err)
-	}
-
-	if cerr != nil {
-		panic(cerr)
-	}
+	var err error
+	var cerr error
 
 	if len(backupList) != 0 {
 		// Try deleting but ignore if delete fails
@@ -180,16 +172,13 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 
 	_, pgerr := Pool.Exec(ctx, "CREATE TABLE "+schemaName+" (itag UUID PRIMARY KEY NOT NULL DEFAULT uuid_generate_v4())")
 
-	if err != nil {
-		panic(err)
-	}
-
 	if pgerr != nil {
 		panic(pgerr)
 	}
 
 	structType := reflect.TypeOf(schema)
 
+	// Schema generation
 	for _, field := range reflect.VisibleFields(structType) {
 		tag, _ := getTag(field) // We want json tag here as it has what we need
 		NotifyMsg("debug", fmt.Sprintln("Got tag of", tag, "for field ", field.Name))
@@ -255,6 +244,23 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 		if pgerr != nil {
 			panic(pgerr)
 		}
+	}
+
+	// If only schema, exit here
+	if *OnlySchema {
+		return
+	}
+
+	data, err := source.GetRecords(schemaName)
+
+	if err != nil {
+		panic(err)
+	}
+
+	count, cerr := source.GetCount(schemaName)
+
+	if cerr != nil {
+		panic(cerr)
 	}
 
 	var counter int

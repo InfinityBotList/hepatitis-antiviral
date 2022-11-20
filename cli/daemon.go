@@ -30,6 +30,11 @@ func NotifyMsg(level string, msg string) {
 		panic("invalid log level")
 	}
 
+	if mb == nil {
+		fmt.Print(fmt.Sprintln(level+":", msg))
+		return
+	}
+
 	// Send message to daemon
 	mb.Write([]byte(fmt.Sprintln(level+":", msg)))
 }

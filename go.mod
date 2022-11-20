@@ -31,6 +31,7 @@ require (
 
 require (
 	github.com/cheggaaa/pb/v3 v3.1.0
+	github.com/georgysavva/scany v1.2.1
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0

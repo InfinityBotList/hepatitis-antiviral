@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hepatitis-antiviral/cli"
 	"hepatitis-antiviral/migrations"
+	"hepatitis-antiviral/sources/jsonfile"
 	"hepatitis-antiviral/sources/mongo"
-	"io/ioutil"
+	"hepatitis-antiviral/sources/postgres"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -31,6 +34,7 @@ type UUID = string
 
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
+	QueueName        string    `bson:"botName" json:"queue_name"`                          // only for libavacado
 	ClientID         string    `bson:"clientID,omitempty" json:"client_id" default:"null"` // Its only nullable for now
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
@@ -76,9 +80,9 @@ type Bot struct {
 	Date             time.Time `bson:"date,omitempty" json:"date" default:"NOW()" notnull:"true"`
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"webhook" default:"null"`
-	WebHMac          *bool     `bson:"webHMac,omitempty" json:"hmac" default:"false"`
+	WebHMac          *bool     `bson:"webHMac" json:"hmac" default:"false"`
 	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
-	Token            string    `bson:"token,omitempty" json:"token" default:"uuid_generate_v4()"`
+	Token            string    `bson:"token" json:"token" default:"uuid_generate_v4()"`
 	LastClaimed      time.Time `bson:"last_claimed,omitempty" json:"last_claimed" default:"null"`
 }
 
@@ -350,7 +354,7 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 			}
 
 			// Read the response body
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 
 			if err != nil {
 				fmt.Println("User fetch error:", err)
@@ -381,18 +385,102 @@ func main() {
 		SchemaOpts: cli.SchemaOpts{
 			TableName: "infinity",
 		},
-		BackupFunc: func() {
-			source = mongo.MongoSource{
-				ConnectionURL: os.Getenv("MONGO"),
-				DatabaseName:  "infinity",
+		BackupSource: func(name string) (cli.BackupSource, error) {
+			switch name {
+			case "json":
+				jsonSource := jsonfile.JsonFileStore{
+					Filename:       "backup.json",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := jsonSource.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return jsonSource, nil
+			case "postgres":
+				postgresSource := postgres.PostgresStore{
+					URL: "postgresql://127.0.0.1:5432/infinity?user=root&password=iblpublic",
+				}
+
+				err := postgresSource.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return postgresSource, nil
+			case "mongo":
+				source = mongo.MongoSource{
+					ConnectionURL:  os.Getenv("MONGO"),
+					DatabaseName:   "infinity",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := source.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return source, nil
+			}
+			return nil, errors.New("unknown source")
+		},
+		BackupLocation: func(name string) (cli.BackupLocation, error) {
+			switch name {
+			case "json":
+				jsonLocation := jsonfile.JsonFileStore{
+					Filename:       "backup.json",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := jsonLocation.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return jsonLocation, nil
+			}
+			return nil, errors.New("unknown location")
+		},
+		LoadSource: func(name string) (cli.Source, error) {
+			switch name {
+			case "mongo":
+				source = mongo.MongoSource{
+					ConnectionURL:  os.Getenv("MONGO"),
+					DatabaseName:   "infinity",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := source.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return source, nil
+			case "json":
+				jsonSource := jsonfile.JsonFileStore{
+					Filename:       "backup.json",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := jsonSource.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return jsonSource, nil
 			}
 
-			err := source.Connect()
-
-			if err != nil {
-				panic(err)
-			}
-
+			return nil, errors.New("unknown source")
+		},
+		BackupFunc: func(source cli.Source) {
 			cli.BackupTool(source, "users", User{}, cli.BackupOpts{
 				IgnoreFKError:     true,
 				IgnoreUniqueError: true,

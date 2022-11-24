@@ -17,8 +17,12 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/bson"
 )
+
+var sess *discordgo.Session
 
 var ctx = context.Background()
 
@@ -34,8 +38,8 @@ type UUID = string
 
 type Bot struct {
 	BotID            string    `bson:"botID" json:"bot_id" unique:"true"`
-	QueueName        string    `bson:"botName" json:"queue_name"`                          // only for libavacado
-	ClientID         string    `bson:"clientID,omitempty" json:"client_id" default:"null"` // Its only nullable for now
+	QueueName        string    `bson:"botName" json:"queue_name"`                     // only for libavacado
+	ClientID         string    `bson:"clientID" json:"client_id" defaultfunc:"cliId"` // Its only nullable for now
 	TagsRaw          string    `bson:"tags" json:"tags" tolist:"true"`
 	Prefix           *string   `bson:"prefix" json:"prefix"`
 	Owner            string    `bson:"main_owner" json:"owner" fkey:"users,user_id" pre:"usercheck"`
@@ -61,7 +65,7 @@ type Bot struct {
 	Github           *string   `bson:"github,omitempty" json:"github" default:"null"`
 	Banner           *string   `bson:"background,omitempty" json:"banner" default:"null"`
 	Invite           *string   `bson:"invite" json:"invite" default:"null"`
-	Type             string    `bson:"type" json:"type"`
+	Type             string    `bson:"type" json:"type" default:"'pending'"`
 	Vanity           *string   `bson:"vanity" json:"vanity" pre:"updname" unique:"true"`
 	ExternalSource   string    `bson:"external_source,omitempty" json:"external_source" default:"null"`
 	ListSource       string    `bson:"listSource,omitempty" json:"list_source" mark:"uuid" default:"null"`
@@ -77,12 +81,12 @@ type Bot struct {
 	Claimed          bool      `bson:"claimed,omitempty" json:"claimed" default:"false"`
 	ClaimedBy        string    `bson:"claimedBy,omitempty" json:"claimed_by" default:"null"`
 	Note             string    `bson:"note,omitempty" json:"approval_note" default:"'No note'" notnull:"true"`
-	Date             time.Time `bson:"date,omitempty" json:"date" default:"NOW()" notnull:"true"`
+	Date             time.Time `bson:"date,omitempty" json:"created_at" default:"NOW()" notnull:"true"`
 	WebAuth          *string   `bson:"webAuth,omitempty" json:"web_auth" default:"null"`
 	WebURL           *string   `bson:"webURL,omitempty" json:"webhook" default:"null"`
 	WebHMac          *bool     `bson:"webHMac" json:"hmac" default:"false"`
 	UniqueClicks     []string  `bson:"unique_clicks,omitempty" json:"unique_clicks" default:"{}" notnull:"true"`
-	Token            string    `bson:"token" json:"token" default:"uuid_generate_v4()"`
+	Token            string    `bson:"token" json:"api_token" default:"uuid_generate_v4()"`
 	LastClaimed      time.Time `bson:"last_claimed,omitempty" json:"last_claimed" default:"null"`
 }
 
@@ -163,22 +167,27 @@ type Packs struct {
 	Short   string    `bson:"short" json:"short"`
 	TagsRaw string    `bson:"tags" json:"tags" tolist:"true"`
 	URL     string    `bson:"url" json:"url" unique:"true"`
-	Date    time.Time `bson:"date" json:"date" default:"NOW()"`
+	Date    time.Time `bson:"date" json:"created_at" default:"NOW()"`
 	Bots    []string  `bson:"bots" json:"bots" tolist:"true"`
 }
 
 type Reviews struct {
-	BotID       string         `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
-	Author      string         `bson:"author" json:"author" fkey:"users,user_id"`
-	Content     string         `bson:"content" json:"content" default:"'Very good bot!'"`
-	Rate        bool           `bson:"rate" json:"rate" default:"true"`
-	StarRate    int            `bson:"star_rate" json:"stars" default:"1"`
-	LikesRaw    map[string]any `bson:"likes" json:"likes"`
-	DislikesRaw map[string]any `bson:"dislikes" json:"dislikes"`
-	Date        time.Time      `bson:"date" json:"date" default:"NOW()"`
-	Replies     map[string]any `bson:"replies" json:"replies" default:"{}"`
-	Editted     bool           `bson:"editted" json:"editted" default:"false"`
-	Flagged     bool           `bson:"flagged" json:"flagged" default:"false"`
+	ID       string    `bson:"uID" unique:"true" json:"id" mark:"uuid" defaultfunc:"uuidgen" default:"uuid_generate_v4()" omit:"true"`
+	BotID    string    `bson:"botID" json:"bot_id" fkey:"bots,bot_id"`
+	Author   string    `bson:"author" json:"author" fkey:"users,user_id"`
+	Content  string    `bson:"content" json:"content" default:"'Very good bot!'"`
+	Rate     bool      `bson:"rate" json:"rate" default:"true"`
+	StarRate int       `bson:"star_rate" json:"stars" default:"1"`
+	Date     time.Time `bson:"date" json:"created_at" default:"NOW()"`
+}
+
+type Replies struct {
+	AnnouncementID string    `bson:"rID" json:"id" mark:"uuid" defaultfunc:"uuidgen" default:"uuid_generate_v4()" omit:"true" fkey:"reviews,id"`
+	Author         string    `bson:"author" json:"author" fkey:"users,user_id"`
+	Content        string    `bson:"content" json:"content" default:"'Very good bot!'"`
+	Rate           bool      `bson:"rate" json:"rate" default:"true"`
+	StarRate       int       `bson:"star_rate" json:"stars" default:"1"`
+	Date           time.Time `bson:"date" json:"created_at" default:"NOW()"`
 }
 
 type Tickets struct {
@@ -334,6 +343,72 @@ var exportedFuncs = map[string]*cli.ExportedFunction{
 			return name
 		},
 	},
+	"cliId": {
+		Param: "botID",
+		Function: func(p any) any {
+			botId := p.(string)
+
+			if cli.Map["clientID"] == nil {
+				cli.NotifyMsg("info", "No client ID for bot "+botId+", finding one")
+				// Call http://localhost:8080/_duser/ID
+				resp, err := http.Get("http://localhost:8080/_duser/" + botId)
+
+				if err != nil {
+					fmt.Println("User fetch error:", err)
+					return "SKIP"
+				}
+
+				if resp.StatusCode != 200 {
+					fmt.Println("User fetch error:", resp.StatusCode)
+					return "SKIP"
+				}
+
+				_, rerr := sess.Request("GET", "https://discord.com/api/v10/applications/"+botId+"/rpc", nil)
+
+				if rerr == nil {
+					source.Conn.Database("infinity").Collection("bots").UpdateOne(context.Background(), bson.M{
+						"botID": botId,
+					}, bson.M{
+						"$set": bson.M{
+							"clientID": botId,
+						},
+					})
+
+					return botId
+				}
+
+				for rerr != nil {
+					clientId := cli.PromptServerChannel("What is the client ID for " + botId + "?")
+
+					if clientId == "DEL" {
+						source.Conn.Database("infinity").Collection("bots").DeleteOne(context.Background(), bson.M{"botID": botId})
+						return "SKIP"
+					}
+
+					_, rerr = sess.Request("GET", "https://discord.com/api/v10/applications/"+clientId+"/rpc", nil)
+
+					if rerr != nil {
+						fmt.Println("Client ID fetch error:", rerr)
+						continue
+					}
+
+					source.Conn.Database("infinity").Collection("bots").UpdateOne(context.Background(), bson.M{
+						"botID": botId,
+					}, bson.M{
+						"$set": bson.M{
+							"clientID": clientId,
+						},
+					})
+
+					return clientId
+				}
+
+				return botId
+			}
+
+			return p
+		},
+	},
 	// Gets a user
 	"getuser": {
 		Param: "userID", // The parameter from mongo to accept
@@ -451,6 +526,20 @@ func main() {
 		},
 		// Optional, experimental
 		LoadSource: func(name string) (cli.Source, error) {
+			sess, err := discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
+
+			if err != nil {
+				panic(err)
+			}
+
+			sess.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
+
+			err = sess.Open()
+
+			if err != nil {
+				panic(err)
+			}
+
 			switch name {
 			case "mongo":
 				source = mongo.MongoSource{
@@ -496,7 +585,7 @@ func main() {
 			})
 
 			cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
-				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "token", "lower(vanity)"},
+				IndexCols:     []string{"bot_id", "staff_bot", "cross_add", "api_token", "lower(vanity)"},
 				ExportedFuncs: exportedFuncs,
 			})
 			cli.BackupTool(source, "claims", Claims{}, cli.BackupOpts{
@@ -516,6 +605,10 @@ func main() {
 				ExportedFuncs: exportedFuncs,
 			})
 			cli.BackupTool(source, "reviews", Reviews{}, cli.BackupOpts{
+				IgnoreFKError: true,
+				ExportedFuncs: exportedFuncs,
+			})
+			cli.BackupTool(source, "replies", Replies{}, cli.BackupOpts{
 				IgnoreFKError: true,
 				ExportedFuncs: exportedFuncs,
 			})

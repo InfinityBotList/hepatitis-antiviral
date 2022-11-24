@@ -352,32 +352,9 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 					}
 				} else {
 					// Ask user what to do
-					var flag bool = true
-					for flag {
-						Bar.Abort(true)
-						fmt.Println("Field", btag[0], "(", tag[0], ") is nil, what do you want to set this to? SKIP to skip this field, or enter a value:")
-						var input string
-						fmt.Scanln(&input)
+					var msg = PromptServerChannel("What should the value of " + tag[0] + " be? (currently null)")
 
-						if input == "SKIP" {
-							flag = false
-							skipped = true
-							StartBar(schemaName, count, true)
-							continue
-						}
-
-						res = resolveInput(input)
-
-						if input != "" {
-							fmt.Println("Setting", btag[0], "(", tag[0], ") to", input, ". Confirm? (y/n)")
-							var confirm string
-							fmt.Scanln(&confirm)
-							StartBar(schemaName, count, true)
-							if confirm == "y" {
-								flag = false
-							}
-						}
-					}
+					res = resolveInput(msg)
 				}
 			}
 

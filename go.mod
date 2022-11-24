@@ -13,7 +13,9 @@ require (
 	github.com/BTBurke/clt v1.11.0 // indirect
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
+	github.com/bwmarrin/discordgo v0.26.1 // indirect
 	github.com/fatih/color v1.10.0 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/jackc/puddle/v2 v2.1.2 // indirect
 	github.com/kless/term v0.0.0-20161130133337-e551c64f56c0 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect

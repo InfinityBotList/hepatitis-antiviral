@@ -28,7 +28,7 @@ var miglist = []migrator{
 			}
 
 			// get every website, support, donate and github link
-			rows, err := pool.Query(ctx, "SELECT bot_id, website, support, github, donate FROM bots")
+			rows, err := pool.Query(ctx, "SELECT bot_id, website, support, github, donate, tags FROM bots")
 
 			if err != nil {
 				panic(err)
@@ -52,11 +52,17 @@ var miglist = []migrator{
 
 				var botID pgtype.Text
 				var website, support, github, donate pgtype.Text
+				var tags []string
 
-				err = rows.Scan(&botID, &website, &support, &github, &donate)
+				err = rows.Scan(&botID, &website, &support, &github, &donate, &tags)
 
 				if err != nil {
 					panic(err)
+				}
+
+				parsed := []string{}
+				for _, tag := range tags {
+					parsed = append(parsed, strings.ReplaceAll(strings.ReplaceAll(tag, " ", ""), "-", ""))
 				}
 
 				var cols = []link{}
@@ -89,7 +95,7 @@ var miglist = []migrator{
 					})
 				}
 
-				_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1 WHERE bot_id = $2", cols, botID.String)
+				_, err = pool.Exec(ctx, "UPDATE bots SET extra_links = $1, tags = $3 WHERE bot_id = $2", cols, botID.String, parsed)
 
 				if err != nil {
 					panic(err)
@@ -231,6 +237,38 @@ var miglist = []migrator{
 				if err != nil {
 					panic(err)
 				}
+			}
+		},
+	},
+	{
+		name: "remove certified+claimed and replace with type",
+		fn: func(ctx context.Context, pool *pgxpool.Pool) {
+			_, err := pool.Exec(ctx, "UPDATE bots SET type = 'claimed' WHERE claimed = true")
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, err = pool.Exec(ctx, "UPDATE bots SET type = 'certified' WHERE certified = true")
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, err = pool.Exec(ctx, "ALTER TABLE bots DROP COLUMN claimed, DROP COLUMN certified")
+
+			if err != nil {
+				panic(err)
+			}
+		},
+	},
+	{
+		name: "fixup claimed_by",
+		fn: func(ctx context.Context, pool *pgxpool.Pool) {
+			_, err := pool.Exec(ctx, "UPDATE bots SET claimed_by = NULL WHERE claimed_by = '' OR claimed_by = 'none'")
+
+			if err != nil {
+				panic(err)
 			}
 		},
 	},

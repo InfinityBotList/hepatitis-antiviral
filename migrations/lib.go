@@ -2,10 +2,8 @@ package migrations
 
 import (
 	"context"
-	"strings"
 
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 func TableExists(ctx context.Context, pool *pgxpool.Pool, name string) bool {
@@ -28,10 +26,6 @@ func ColExists(ctx context.Context, pool *pgxpool.Pool, table, col string) bool 
 	}
 
 	return exists
-}
-
-func isNone(v pgtype.Text) bool {
-	return v.Status == pgtype.Null || v.String == "" || strings.ToLower(v.String) == "none" || strings.ToLower(v.String) == "null"
 }
 
 type migrator struct {

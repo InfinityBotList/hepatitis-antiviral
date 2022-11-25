@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/vbauerster/mpb/v8"
 	"golang.org/x/exp/slices"
 )
@@ -24,10 +24,15 @@ var (
 	OnlySchema *bool
 )
 
-type ExportedFunction struct {
-	Param    string
-	Function func(p any) any
+type TransformRow struct {
+	Records          []map[string]any
+	CurrentRecord    map[string]any
+	CurrentValue     any
+	CurrentIteration int
 }
+
+// This should return the value for the specific row
+type TransformFunc func(TransformRow) any
 
 type BackupOpts struct {
 	Debug             bool
@@ -35,7 +40,7 @@ type BackupOpts struct {
 	IgnoreUniqueError bool
 	RenameTo          string
 	IndexCols         []string
-	ExportedFuncs     map[string]*ExportedFunction
+	Transforms        map[string]TransformFunc
 }
 
 type Source interface {
@@ -47,28 +52,28 @@ type Source interface {
 	ExtParse(res any) (any, error)
 }
 
-func getTag(field reflect.StructField) (json []string, bson []string) {
+func getTag(field reflect.StructField) (dest []string, src []string) {
 	if v, ok := tagCache[field.Name]; ok {
 		return v[0], v[1]
 	}
 
-	tagSplit := strings.Split(field.Tag.Get("bson"), ",")
-	jsonKeyName := strings.Split(field.Tag.Get("json"), ",")
+	tagSplit := strings.Split(field.Tag.Get("src"), ",")
+	destKeyName := strings.Split(field.Tag.Get("dest"), ",")
 
 	if len(tagSplit) == 0 {
 		panic("No tag found for " + field.Name)
 	}
 
-	if len(jsonKeyName) < 1 {
-		panic("No json key name found for bson tag at field " + field.Name)
+	if len(destKeyName) < 1 {
+		panic("No dest key name found for src tag at field " + field.Name)
 	}
 
-	if jsonKeyName[0] == "-" {
-		jsonKeyName[0] = tagSplit[0]
+	if destKeyName[0] == "-" {
+		destKeyName[0] = tagSplit[0]
 	}
 
-	if jsonKeyName[0] == "" || jsonKeyName[0] == "-" {
-		panic("No json key name found for bson tag at field " + field.Name)
+	if destKeyName[0] == "" || destKeyName[0] == "-" {
+		panic("No dest key name found for src tag at field " + field.Name)
 	}
 
 	var cond string
@@ -125,9 +130,9 @@ func getTag(field reflect.StructField) (json []string, bson []string) {
 		fieldType = field.Tag.Get("mark")
 	}
 
-	tagCache[field.Name] = [2][]string{{jsonKeyName[0], fieldType + " " + cond}, {tagSplit[0], fieldType + " " + cond}}
+	tagCache[field.Name] = [2][]string{{destKeyName[0], fieldType + " " + cond}, {tagSplit[0], fieldType + " " + cond}}
 
-	return []string{jsonKeyName[0], fieldType + " " + cond}, []string{tagSplit[0], fieldType + " " + cond}
+	return []string{destKeyName[0], fieldType + " " + cond}, []string{tagSplit[0], fieldType + " " + cond}
 }
 
 func resolveInput(input string) any {
@@ -147,8 +152,8 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 		mb = mpb.New(mpb.WithWidth(64))
 	}
 
-	if opts.ExportedFuncs == nil {
-		panic("exportedFuncs cannot be nil")
+	if opts.Transforms == nil {
+		opts.Transforms = make(map[string]TransformFunc)
 	}
 
 	tagCache = make(map[string][2][]string)
@@ -180,7 +185,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 
 	// Schema generation
 	for _, field := range reflect.VisibleFields(structType) {
-		tag, _ := getTag(field) // We want json tag here as it has what we need
+		tag, _ := getTag(field) // We want dest tag here as it has what we need
 		NotifyMsg("debug", fmt.Sprintln("Got tag of", tag, "for field ", field.Name))
 
 		var (
@@ -283,7 +288,7 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 			if field.Tag.Get("omit") == "true" {
 				continue
 			}
-			tag, _ := getTag(field) // Json tag here again
+			tag, _ := getTag(field) // dest tag here again
 
 			sqlStr += tag[0] + ","
 		}
@@ -316,25 +321,25 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 				res = nil
 			}
 
-			if res == nil {
-				if field.Tag.Get("defaultfunc") != "" {
-					fn := opts.ExportedFuncs[field.Tag.Get("defaultfunc")]
-					if fn == nil {
-						panic("Default function " + field.Tag.Get("defaultfunc") + " not found")
-					}
-					res = fn.Function(result[fn.Param])
-				}
+			if field.Tag.Get("defaultfunc") != "" || field.Tag.Get("pre") != "" || field.Tag.Get("tolist") != "" {
+				panic("defaultfunc and pre are deprecated, use a transform instead")
 			}
 
-			if field.Tag.Get("pre") != "" {
-				fn := opts.ExportedFuncs[field.Tag.Get("pre")]
-				if fn == nil {
-					panic("Pre function " + field.Tag.Get("pre") + " not found")
-				}
-				res = fn.Function(result[fn.Param])
+			// Apply transforms
+			if transform, ok := opts.Transforms[field.Name]; ok {
+				res = transform(TransformRow{
+					Records:          data,
+					CurrentRecord:    result,
+					CurrentValue:     res,
+					CurrentIteration: counter,
+				})
 			}
 
-			// We have to do this a second time after defaultfunc is called just in case it changed the value back to nil
+			// Check again here
+			if res == "" {
+				res = nil
+			}
+
 			if res == nil {
 				if field.Tag.Get("default") != "" {
 					if strings.Contains(field.Tag.Get("default"), "SKIP") {
@@ -403,17 +408,6 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 
 			if err == nil {
 				res = result
-			}
-
-			// Handle tolist
-			if field.Tag.Get("tolist") == "true" {
-				if resCast, ok := res.(string); ok {
-					res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
-
-					if opts.Debug {
-						NotifyMsg("debug", "Converting "+resCast+" to list")
-					}
-				}
 			}
 
 			args = append(args, res)

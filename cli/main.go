@@ -2,9 +2,8 @@ package cli
 
 import (
 	"flag"
-	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -15,11 +14,9 @@ type SchemaOpts struct {
 }
 
 type App struct {
-	SchemaOpts     SchemaOpts
-	BackupFunc     func(source Source)
-	LoadSource     func(name string) (Source, error)
-	BackupSource   func(name string) (BackupSource, error)
-	BackupLocation func(name string) (BackupLocation, error)
+	SchemaOpts SchemaOpts
+	BackupFunc func(source Source)
+	LoadSource func(name string) (Source, error)
 }
 
 func Main(app App) {
@@ -29,8 +26,6 @@ func Main(app App) {
 
 	OnlySchema = flag.Bool("schema", false, "Only create schema")
 	source := flag.String("source", "mongo", "Source to use. Must be listed in schemas.go")
-	backupEnabled := flag.Bool("backup", false, "Use backup feature")
-	backupMode := flag.String("backup-mode", "postgres json", "Options for backup feature to copy from a BackupLocation to a BackupSource")
 	flag.Parse()
 
 	if len(backupList) == 0 {
@@ -49,35 +44,8 @@ func Main(app App) {
 		return
 	}
 
-	if *backupEnabled {
-		backupModeList := strings.Split(*backupMode, " ")
-
-		NotifyMsg("info", "Got backup mode:"+*backupMode)
-		if len(backupModeList) != 2 {
-			NotifyMsg("error", "Invalid backup mode")
-			return
-		}
-
-		backupSrc, err := app.BackupSource(backupModeList[0])
-
-		if err != nil {
-			NotifyMsg("error", "Failed to load backup source: "+err.Error())
-			return
-		}
-
-		backupRecv, err := app.BackupLocation(backupModeList[1])
-
-		if err != nil {
-			NotifyMsg("error", "Failed to load backup location: "+err.Error())
-			return
-		}
-
-		Backup(backupSrc, backupRecv)
-		return
-	}
-
 	// Create postgres conn
-	Pool, err = pgxpool.New(ctx, "postgresql://127.0.0.1:5432/"+app.SchemaOpts.TableName+"?user=root&password=iblpublic")
+	Pool, err = pgxpool.Connect(ctx, "postgresql://127.0.0.1:5432/"+app.SchemaOpts.TableName+"?user=root&password=iblpublic")
 
 	if err != nil {
 		panic(err)

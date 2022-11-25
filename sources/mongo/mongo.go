@@ -4,7 +4,6 @@ package mongo
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -109,47 +108,14 @@ func (m MongoSource) ExtParse(res any) (any, error) {
 	if resCast, ok := res.(primitive.DateTime); ok {
 		result = time.UnixMilli(resCast.Time().UnixMilli())
 	} else if resCast, ok := res.(primitive.A); ok {
-		if len(resCast) > 0 {
-			// We can try doing some smart type inference here
-			switch resCast[0].(type) {
-			case primitive.DateTime:
-				var resultV = []time.Time{}
+		var resultArr []any = make([]any, len(resCast))
 
-				for _, v := range resCast {
-					resultV = append(resultV, v.(primitive.DateTime).Time())
-				}
-
-				result = resultV
-				return result, nil
-			case int64:
-				var resultV = []int64{}
-
-				for _, v := range resCast {
-					resultV = append(resultV, v.(int64))
-				}
-
-				result = resultV
-				return result, nil
-			case float64:
-				var resultV = []float64{}
-
-				for _, v := range resCast {
-					resultV = append(resultV, v.(float64))
-				}
-
-				result = resultV
-				return result, nil
+		for i, v := range resCast {
+			res, err := m.ExtParse(v)
+			if err != nil {
+				resultArr[i] = v
 			}
-		}
-
-		// Fallback to string
-		if resCast == nil {
-			result = []string{}
-		}
-
-		var resultArr = []string{}
-		for _, v := range resCast {
-			resultArr = append(resultArr, fmt.Sprint(v))
+			resultArr[i] = res
 		}
 
 		result = resultArr

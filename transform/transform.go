@@ -12,11 +12,13 @@ func ToList(tr cli.TransformRow) any {
 	res := tr.CurrentValue
 	if resCast, ok := res.(string); ok {
 		res = strings.Split(strings.ReplaceAll(resCast, " ", ""), ",")
+		return res
 	} else {
-		return []string{}
+		if res == nil {
+			return []string{}
+		}
+		return res
 	}
-
-	return res
 }
 
 // Defines a default value transformer for a field, replaces “defaultfunc“

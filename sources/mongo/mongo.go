@@ -107,18 +107,6 @@ func (m MongoSource) ExtParse(res any) (any, error) {
 	var result any
 	if resCast, ok := res.(primitive.DateTime); ok {
 		result = time.UnixMilli(resCast.Time().UnixMilli())
-	} else if resCast, ok := res.(primitive.A); ok {
-		var resultArr []any = make([]any, len(resCast))
-
-		for i, v := range resCast {
-			res, err := m.ExtParse(v)
-			if err != nil {
-				resultArr[i] = v
-			}
-			resultArr[i] = res
-		}
-
-		result = resultArr
 	} else {
 		return result, errors.New("no external representation for type")
 	}

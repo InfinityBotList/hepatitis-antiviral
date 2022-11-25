@@ -44,7 +44,7 @@ type Bot struct {
 	Tags             []string  `src:"tags" dest:"tags"`
 	Prefix           *string   `src:"prefix" dest:"prefix"`
 	Owner            string    `src:"main_owner" dest:"owner" fkey:"users,user_id"`
-	AdditionalOwners []string  `src:"additional_owners" dest:"additional_owners"`
+	AdditionalOwners []string  `src:"additional_owners" dest:"additional_owners" notnull:"true"`
 	StaffBot         bool      `src:"staff" dest:"staff_bot" default:"false"`
 	Short            string    `src:"short" dest:"short"`
 	Long             string    `src:"long" dest:"long"`
@@ -192,7 +192,8 @@ var botTransforms = map[string]cli.TransformFunc{
 
 		return botId
 	}),
-	"Tags": transform.ToList,
+	"AdditionalOwners": transform.ToList,
+	"Tags":             transform.ToList,
 	"Owner": func(tr cli.TransformRow) any {
 		if tr.CurrentValue == nil {
 			return nil

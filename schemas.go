@@ -464,14 +464,14 @@ var announcementTransforms = map[string]cli.TransformFunc{
 type Votes struct {
 	UserID string    `src:"userID" dest:"user_id" fkey:"users,user_id" fkignore:"true"`
 	BotID  string    `src:"botID" dest:"bot_id" fkey:"bots,bot_id"`
-	Date   time.Time `src:"date" dest:"date" default:"NOW()"`
+	Date   time.Time `src:"date" dest:"created_at" default:"NOW()"`
 }
 
 type PackVotes struct {
 	UserID string    `src:"userID" dest:"user_id" fkey:"users,user_id"`
 	URL    string    `src:"url" dest:"url" fkey:"packs,url"`
 	Upvote bool      `src:"upvote" dest:"upvote"`
-	Date   time.Time `src:"date" dest:"date" default:"NOW()"`
+	Date   time.Time `src:"date" dest:"created_at" default:"NOW()"`
 }
 
 type Packs struct {
@@ -512,7 +512,7 @@ type Tickets struct {
 	LogURL         string    `src:"logURL,omitempty" dest:"log_url" default:"null"`
 	CloseUserID    string    `src:"closeUserID,omitempty" dest:"close_user_id" default:"null"`
 	Open           bool      `src:"open" dest:"open" default:"true"`
-	Date           time.Time `src:"date" dest:"date" default:"NOW()"`
+	Date           time.Time `src:"date" dest:"created_at" default:"NOW()"`
 	PanelMessageID string    `src:"panelMessageID,omitempty" dest:"panel_message_id" default:"null"`
 	PanelChannelID string    `src:"panelChannelID,omitempty" dest:"panel_channel_id" default:"null"`
 }

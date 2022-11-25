@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 	"unicode"
@@ -38,52 +39,52 @@ var source mongo.MongoSource
 type UUID = string
 
 type Bot struct {
-	BotID            string    `src:"botID" dest:"bot_id" unique:"true"`
-	QueueName        string    `src:"botName" dest:"queue_name"` // only for libavacado
-	ClientID         string    `src:"clientID" dest:"client_id"` // Its only nullable for now
-	Tags             []string  `src:"tags" dest:"tags"`
-	Prefix           *string   `src:"prefix" dest:"prefix"`
-	Owner            string    `src:"main_owner" dest:"owner" fkey:"users,user_id"`
-	AdditionalOwners []string  `src:"additional_owners" dest:"additional_owners" notnull:"true"`
-	StaffBot         bool      `src:"staff" dest:"staff_bot" default:"false"`
-	Short            string    `src:"short" dest:"short"`
-	Long             string    `src:"long" dest:"long"`
-	Library          *string   `src:"library" dest:"library" default:"'custom'"`
-	ExtraLinks       []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`
-	NSFW             bool      `src:"nsfw" dest:"nsfw" default:"false"`
-	Premium          bool      `src:"premium" dest:"premium" default:"false"`
-	PendingCert      bool      `src:"pending_cert" dest:"pending_cert" default:"false"`
-	Servers          int       `src:"servers" dest:"servers" default:"0"`
-	Shards           int       `src:"shards" dest:"shards" default:"0"`
-	Users            int       `src:"users" dest:"users" default:"0"`
-	ShardSet         []int     `src:"shardArray" dest:"shard_list" default:"{}"`
-	Votes            int       `src:"votes" dest:"votes" default:"0"`
-	Clicks           int       `src:"clicks" dest:"clicks" default:"0"`
-	InviteClicks     int       `src:"invite_clicks" dest:"invite_clicks" default:"0"`
-	Banner           *string   `src:"background,omitempty" dest:"banner" default:"null"`
-	Invite           *string   `src:"invite" dest:"invite" default:"null"`
-	Type             string    `src:"type" dest:"type" default:"'pending'"`
-	Vanity           *string   `src:"vanity" dest:"vanity" unique:"true"`
-	ExternalSource   string    `src:"external_source,omitempty" dest:"external_source" default:"null"`
-	ListSource       string    `src:"listSource,omitempty" dest:"list_source" mark:"uuid" default:"null"`
-	VoteBanned       bool      `src:"vote_banned,omitempty" dest:"vote_banned" default:"false" notnull:"true"`
-	CrossAdd         bool      `src:"cross_add" dest:"cross_add" default:"true" notnull:"true"`
-	StartPeriod      int64     `src:"start_period,omitempty" dest:"start_premium_period" default:"0" notnull:"true"`
-	SubPeriod        int64     `src:"sub_period,omitempty" dest:"premium_period_length" default:"0" notnull:"true"`
-	CertReason       string    `src:"cert_reason,omitempty" dest:"cert_reason" default:"null"`
-	Announce         bool      `src:"announce,omitempty" dest:"announce" default:"false"`
-	AnnounceMessage  string    `src:"announce_msg,omitempty" dest:"announce_message" default:"null"`
-	Uptime           int64     `src:"uptime,omitempty" dest:"uptime" default:"0"`
-	TotalUptime      int64     `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
-	ClaimedBy        string    `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
-	Note             string    `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
-	Date             time.Time `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
-	WebAuth          *string   `src:"webAuth,omitempty" dest:"web_auth" default:"null"`
-	WebURL           *string   `src:"webURL,omitempty" dest:"webhook" default:"null"`
-	WebHMac          *bool     `src:"webHMac" dest:"hmac" default:"false"`
-	UniqueClicks     []string  `src:"unique_clicks,omitempty" dest:"unique_clicks" default:"{}" notnull:"true"`
-	Token            string    `src:"token" dest:"api_token" default:"uuid_generate_v4()"`
-	LastClaimed      time.Time `src:"last_claimed,omitempty" dest:"last_claimed" default:"null"`
+	BotID            string        `src:"botID" dest:"bot_id" unique:"true"`
+	QueueName        string        `src:"botName" dest:"queue_name"` // only for libavacado
+	ClientID         string        `src:"clientID" dest:"client_id"` // Its only nullable for now
+	Tags             []string      `src:"tags" dest:"tags"`
+	Prefix           *string       `src:"prefix" dest:"prefix"`
+	Owner            string        `src:"main_owner" dest:"owner" fkey:"users,user_id"`
+	AdditionalOwners []string      `src:"additional_owners" dest:"additional_owners" notnull:"true"`
+	StaffBot         bool          `src:"staff" dest:"staff_bot" default:"false"`
+	Short            string        `src:"short" dest:"short"`
+	Long             string        `src:"long" dest:"long"`
+	Library          *string       `src:"library" dest:"library" default:"'custom'"`
+	ExtraLinks       []any         `src:"extra_links" dest:"extra_links" mark:"jsonb"`
+	NSFW             bool          `src:"nsfw" dest:"nsfw" default:"false"`
+	Premium          bool          `src:"premium" dest:"premium" default:"false"`
+	PendingCert      bool          `src:"pending_cert" dest:"pending_cert" default:"false"`
+	Servers          int           `src:"servers" dest:"servers" default:"0"`
+	Shards           int           `src:"shards" dest:"shards" default:"0"`
+	Users            int           `src:"users" dest:"users" default:"0"`
+	ShardSet         []int         `src:"shardArray" dest:"shard_list" default:"{}"`
+	Votes            int           `src:"votes" dest:"votes" default:"0"`
+	Clicks           int           `src:"clicks" dest:"clicks" default:"0"`
+	InviteClicks     int           `src:"invite_clicks" dest:"invite_clicks" default:"0"`
+	Banner           *string       `src:"background,omitempty" dest:"banner" default:"null"`
+	Invite           *string       `src:"invite" dest:"invite" default:"null"`
+	Type             string        `src:"type" dest:"type" default:"'pending'"`
+	Vanity           *string       `src:"vanity" dest:"vanity" unique:"true"`
+	ExternalSource   string        `src:"external_source,omitempty" dest:"external_source" default:"null"`
+	ListSource       string        `src:"listSource,omitempty" dest:"list_source" mark:"uuid" default:"null"`
+	VoteBanned       bool          `src:"vote_banned,omitempty" dest:"vote_banned" default:"false" notnull:"true"`
+	CrossAdd         bool          `src:"cross_add" dest:"cross_add" default:"true" notnull:"true"`
+	StartPeriod      time.Time     `src:"start_period,omitempty" dest:"start_premium_period" default:"NOW()" notnull:"true"`
+	SubPeriod        time.Duration `src:"sub_period,omitempty" dest:"premium_period_length" default:"'12 hours'" mark:"interval" notnull:"true"`
+	CertReason       string        `src:"cert_reason,omitempty" dest:"cert_reason" default:"null"`
+	Announce         bool          `src:"announce,omitempty" dest:"announce" default:"false"`
+	AnnounceMessage  string        `src:"announce_msg,omitempty" dest:"announce_message" default:"null"`
+	Uptime           int64         `src:"uptime,omitempty" dest:"uptime" default:"0"`
+	TotalUptime      int64         `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
+	ClaimedBy        string        `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
+	Note             string        `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
+	Date             time.Time     `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
+	WebAuth          *string       `src:"webAuth,omitempty" dest:"web_auth" default:"null"`
+	WebURL           *string       `src:"webURL,omitempty" dest:"webhook" default:"null"`
+	WebHMac          *bool         `src:"webHMac" dest:"hmac" default:"false"`
+	UniqueClicks     []string      `src:"unique_clicks,omitempty" dest:"unique_clicks" default:"{}" notnull:"true"`
+	Token            string        `src:"token" dest:"api_token" default:"uuid_generate_v4()"`
+	LastClaimed      time.Time     `src:"last_claimed,omitempty" dest:"last_claimed" default:"null"`
 }
 
 var botTransforms = map[string]cli.TransformFunc{
@@ -97,6 +98,43 @@ var botTransforms = map[string]cli.TransformFunc{
 		}
 
 		return tr.CurrentValue
+	},
+	"StartPeriod": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		switch val := tr.CurrentValue.(type) {
+		case time.Time:
+			return val
+		case int32:
+			return time.Unix(0, int64(val*int32(time.Millisecond)))
+		case int64:
+			return time.Unix(0, int64(val*int64(time.Millisecond)))
+		case float64:
+			return time.Unix(0, int64(val*float64(time.Millisecond)))
+		}
+
+		panic("invalid type for StartPeriod")
+	},
+	"SubPeriod": func(tr cli.TransformRow) any {
+		// Convert to time.Duration
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		switch val := tr.CurrentValue.(type) {
+		case time.Duration:
+			return val
+		case int32:
+			return time.Duration(val) * time.Millisecond
+		case int64:
+			return time.Duration(val) * time.Millisecond
+		case float64:
+			return time.Duration(val) * time.Millisecond
+		}
+
+		panic("invalid type for SubPeriod: " + reflect.TypeOf(tr.CurrentValue).String())
 	},
 	"Type": func(tr cli.TransformRow) any {
 		if tr.CurrentValue == nil {

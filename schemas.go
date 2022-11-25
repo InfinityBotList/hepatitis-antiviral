@@ -52,7 +52,6 @@ type Bot struct {
 	ExtraLinks       []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`
 	NSFW             bool      `src:"nsfw" dest:"nsfw" default:"false"`
 	Premium          bool      `src:"premium" dest:"premium" default:"false"`
-	Certified        bool      `src:"certified" dest:"certified" default:"false"`
 	PendingCert      bool      `src:"pending_cert" dest:"pending_cert" default:"false"`
 	Servers          int       `src:"servers" dest:"servers" default:"0"`
 	Shards           int       `src:"shards" dest:"shards" default:"0"`
@@ -76,7 +75,6 @@ type Bot struct {
 	AnnounceMessage  string    `src:"announce_msg,omitempty" dest:"announce_message" default:"null"`
 	Uptime           int64     `src:"uptime,omitempty" dest:"uptime" default:"0"`
 	TotalUptime      int64     `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
-	Claimed          bool      `src:"claimed,omitempty" dest:"claimed" default:"false"`
 	ClaimedBy        string    `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
 	Note             string    `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
 	Date             time.Time `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
@@ -89,6 +87,36 @@ type Bot struct {
 }
 
 var botTransforms = map[string]cli.TransformFunc{
+	"ClaimedBy": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		if strings.ToLower(tr.CurrentValue.(string)) == "none" || tr.CurrentValue.(string) == "" {
+			return nil
+		}
+
+		return tr.CurrentValue
+	},
+	"Type": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return "approved"
+		}
+
+		if val, ok := tr.CurrentRecord["certified"].(bool); ok && val {
+			return "certified"
+		}
+
+		if tr.CurrentValue == "approved" || tr.CurrentValue == "denied" {
+			return tr.CurrentValue
+		}
+
+		if val, ok := tr.CurrentRecord["claimed"].(bool); ok && val {
+			return "claimed"
+		}
+
+		return tr.CurrentValue
+	},
 	"UniqueClicks": func(tr cli.TransformRow) any {
 		clicks, ok := tr.CurrentValue.([]string)
 
@@ -551,6 +579,21 @@ func main() {
 		},
 		// Optional, experimental
 		BackupFunc: func(source cli.Source) {
+			var err error
+			sess, err = discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
+
+			if err != nil {
+				panic(err)
+			}
+
+			sess.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
+
+			err = sess.Open()
+
+			if err != nil {
+				panic(err)
+			}
+
 			cli.BackupTool(source, "users", User{}, cli.BackupOpts{
 				IgnoreFKError:     true,
 				IgnoreUniqueError: true,

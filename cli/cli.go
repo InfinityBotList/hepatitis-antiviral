@@ -20,7 +20,6 @@ var (
 	backupList []string
 	tagCache   map[string][2][]string = make(map[string][2][]string)
 
-	Map        map[string]any
 	OnlySchema *bool
 )
 
@@ -277,8 +276,6 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 		}
 
 		counter++
-
-		Map = result
 
 		Bar.Increment()
 

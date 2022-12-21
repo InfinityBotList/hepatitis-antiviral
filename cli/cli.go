@@ -270,6 +270,9 @@ func BackupTool(source Source, schemaName string, schema any, opts BackupOpts) {
 	var counter int
 
 	StartBar(schemaName, count, true)
+
+	NotifyMsg("info", "...")
+
 	for _, result := range data {
 		if counter == 0 {
 			NotifyMsg("info", "Backing up "+schemaName)

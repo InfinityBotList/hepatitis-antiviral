@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha512"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -40,8 +39,8 @@ type UUID = string
 
 type Bot struct {
 	BotID            string        `src:"botID" dest:"bot_id" unique:"true"`
-	QueueName        string        `src:"botName" dest:"queue_name"` // only for libavacado
-	ClientID         string        `src:"clientID" dest:"client_id"` // Its only nullable for now
+	QueueName        string        `src:"botName" dest:"queue_name"`
+	ClientID         string        `src:"clientID" dest:"client_id" unique:"true"`
 	Tags             []string      `src:"tags" dest:"tags"`
 	Prefix           *string       `src:"prefix" dest:"prefix"`
 	Owner            string        `src:"main_owner" dest:"owner" fkey:"users,user_id"`
@@ -156,27 +155,7 @@ var botTransforms = map[string]cli.TransformFunc{
 		return tr.CurrentValue
 	},
 	"UniqueClicks": func(tr cli.TransformRow) any {
-		clicks, ok := tr.CurrentValue.([]string)
-
-		if !ok {
-			return []string{}
-		}
-
-		var uniqueClicksHashed = make([]string, len(clicks))
-
-		for i, v := range clicks {
-			sha_512 := sha512.New()
-
-			sha_512.Write([]byte(v))
-
-			sum := sha_512.Sum(nil)
-
-			hexedSum := hex.EncodeToString(sum)
-
-			uniqueClicksHashed[i] = hexedSum
-		}
-
-		return uniqueClicksHashed
+		return []string{}
 	},
 	"ExtraLinks": func(tr cli.TransformRow) any {
 		var links = []link{}
@@ -203,19 +182,6 @@ var botTransforms = map[string]cli.TransformFunc{
 		botId := tr.CurrentRecord["botID"].(string)
 
 		cli.NotifyMsg("info", "No client ID for bot "+botId+", finding one")
-		// Call http://localhost:8080/_duser/ID
-		resp, err := http.Get("http://localhost:8080/_duser/" + botId)
-
-		if err != nil {
-			fmt.Println("User fetch error:", err)
-			return "SKIP"
-		}
-
-		if resp.StatusCode != 200 {
-			fmt.Println("User fetch error:", resp.StatusCode)
-			return "SKIP"
-		}
-
 		_, rerr := sess.Request("GET", "https://discord.com/api/v10/applications/"+botId+"/rpc", nil)
 
 		if rerr == nil {
@@ -349,26 +315,25 @@ type OnboardData struct {
 }
 
 type User struct {
-	UserID                    string         `src:"userID" dest:"user_id" unique:"true" default:"SKIP"`
-	Username                  string         `src:"username" dest:"username" default:"User"`
-	StaffOnboarded            bool           `src:"staff_onboarded" dest:"staff_onboarded" default:"false"`
-	StaffOnboardState         string         `src:"staff_onboard_state" dest:"staff_onboard_state" default:"'pending'"`
-	StaffOnboardLastStartTime time.Time      `src:"staff_onboard_last_start_time,omitempty" dest:"staff_onboard_last_start_time" default:"null"`
-	StaffOnboardMacroTime     time.Time      `src:"staff_onboard_macro_time,omitempty" dest:"staff_onboard_macro_time" default:"null"`
-	StaffOnboardSessionCode   string         `src:"staff_onboard_session_code,omitempty" dest:"staff_onboard_session_code,omitempty" default:"null"`
-	Staff                     bool           `src:"staff" dest:"staff" default:"false"`
-	Admin                     bool           `src:"admin" dest:"admin" default:"false"`
-	HAdmin                    bool           `src:"hadmin" dest:"hadmin" default:"false"`
-	Certified                 bool           `src:"certified" dest:"certified" default:"false"`
-	IBLDev                    bool           `src:"ibldev" dest:"ibldev" default:"false"`
-	IBLHDev                   bool           `src:"iblhdev" dest:"iblhdev" default:"false"`
-	Developer                 bool           `src:"developer" dest:"developer" default:"false"`
-	ExtraLinks                []any          `src:"extra_links" dest:"extra_links" mark:"jsonb"`
-	APIToken                  string         `src:"apiToken" dest:"api_token"`
-	About                     *string        `src:"about,omitempty" dest:"about" default:"'I am a very mysterious person'"`
-	VoteBanned                bool           `src:"vote_banned,omitempty" dest:"vote_banned" default:"false"`
-	StaffStats                map[string]any `src:"staff_stats" dest:"staff_stats" default:"{}"`
-	NewStaffStats             map[string]any `src:"new_staff_stats" dest:"new_staff_stats" default:"{}"`
+	UserID                    string    `src:"userID" dest:"user_id" unique:"true" default:"SKIP"`
+	Username                  string    `src:"username" dest:"username" default:"User"`
+	StaffOnboarded            bool      `src:"staff_onboarded" dest:"staff_onboarded" default:"false"`
+	StaffOnboardState         string    `src:"staff_onboard_state" dest:"staff_onboard_state" default:"'pending'"`
+	StaffOnboardLastStartTime time.Time `src:"staff_onboard_last_start_time,omitempty" dest:"staff_onboard_last_start_time" default:"null"`
+	StaffOnboardMacroTime     time.Time `src:"staff_onboard_macro_time,omitempty" dest:"staff_onboard_macro_time" default:"null"`
+	StaffOnboardSessionCode   string    `src:"staff_onboard_session_code,omitempty" dest:"staff_onboard_session_code,omitempty" default:"null"`
+	StaffOnboardGuild         string    `src:"staff_onboard_guild,omitempty" dest:"staff_onboard_guild,omitempty" default:"null"`
+	Staff                     bool      `src:"staff" dest:"staff" default:"false"`
+	Admin                     bool      `src:"admin" dest:"admin" default:"false"`
+	HAdmin                    bool      `src:"hadmin" dest:"hadmin" default:"false"`
+	Certified                 bool      `src:"certified" dest:"certified" default:"false"`
+	IBLDev                    bool      `src:"ibldev" dest:"ibldev" default:"false"`
+	IBLHDev                   bool      `src:"iblhdev" dest:"iblhdev" default:"false"`
+	Developer                 bool      `src:"developer" dest:"developer" default:"false"`
+	ExtraLinks                []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`
+	APIToken                  string    `src:"apiToken" dest:"api_token"`
+	About                     *string   `src:"about,omitempty" dest:"about" default:"'I am a very mysterious person'"`
+	VoteBanned                bool      `src:"vote_banned,omitempty" dest:"vote_banned" default:"false"`
 }
 
 var userTransforms = map[string]cli.TransformFunc{
@@ -487,6 +452,15 @@ type Packs struct {
 var packTransforms = map[string]cli.TransformFunc{
 	"Tags": transform.ToList,
 	"Bots": transform.ToList,
+	"URL": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return RandString(12)
+		}
+
+		reg, _ := regexp.Compile("[^a-zA-Z0-9 ]+")
+
+		return reg.ReplaceAllString(tr.CurrentValue.(string), "")
+	},
 }
 
 type Reviews struct {
@@ -505,23 +479,17 @@ var reviewTransforms = map[string]cli.TransformFunc{
 }
 
 type Tickets struct {
-	ChannelID      string    `src:"channelID" dest:"channel_id"`
-	Topic          string    `src:"topic" dest:"topic" default:"'Support'"`
-	UserID         string    `src:"userID" dest:"user_id"` // No fkey here bc a user may not be a user on the table yet
-	TicketID       int       `src:"ticketID" dest:"id" unique:"true"`
-	LogURL         string    `src:"logURL,omitempty" dest:"log_url" default:"null"`
-	CloseUserID    string    `src:"closeUserID,omitempty" dest:"close_user_id" default:"null"`
-	Open           bool      `src:"open" dest:"open" default:"true"`
-	Date           time.Time `src:"date" dest:"created_at" default:"NOW()"`
-	PanelMessageID string    `src:"panelMessageID,omitempty" dest:"panel_message_id" default:"null"`
-	PanelChannelID string    `src:"panelChannelID,omitempty" dest:"panel_channel_id" default:"null"`
-}
-
-type Transcripts struct {
-	TicketID int            `src:"ticketID" dest:"id" fkey:"tickets,id"`
-	Data     map[string]any `src:"data" dest:"data" default:"{}"`
-	ClosedBy map[string]any `src:"closedBy" dest:"closed_by" default:"{}"`
-	OpenedBy map[string]any `src:"openedBy" dest:"opened_by" default:"{}"`
+	ChannelID     string    `src:"channelID" dest:"channel_id"`
+	TopicID       string    `src:"topicID" dest:"topic_id"`
+	Topic         string    `src:"topic" dest:"topic" mark:"jsonb" default:"'{}'"`
+	Issue         string    `src:"issue" dest:"issue"`
+	TicketContext string    `src:"ticketContext" dest:"ticket_context" mark:"jsonb" default:"'{}'"`
+	Messages      string    `src:"messages" dest:"messages" mark:"jsonb" default:"'{}'"`
+	UserID        string    `src:"userID" dest:"user_id"` // No fkey here bc a user may not be a user on the table yet
+	TicketID      string    `src:"ticketID" dest:"id" unique:"true"`
+	CloseUserID   string    `src:"closeUserID,omitempty" dest:"close_user_id" default:"null"`
+	Open          bool      `src:"open" dest:"open" default:"true"`
+	Date          time.Time `src:"date" dest:"created_at" default:"NOW()"`
 }
 
 type Alerts struct {
@@ -662,12 +630,9 @@ func main() {
 				IgnoreFKError: true,
 				Transforms:    reviewTransforms,
 			})
-			cli.BackupTool(source, "tickets", Tickets{}, cli.BackupOpts{
+			cli.BackupTool(source, "tickets2", Tickets{}, cli.BackupOpts{
 				IgnoreFKError: true,
-			})
-
-			cli.BackupTool(source, "transcripts", Transcripts{}, cli.BackupOpts{
-				IgnoreFKError: true,
+				RenameTo:      "tickets",
 			})
 
 			cli.BackupTool(source, "poppypaw", Poppypaw{}, cli.BackupOpts{})
@@ -683,6 +648,8 @@ func main() {
 			cli.BackupTool(source, "pack_votes", PackVotes{}, cli.BackupOpts{})
 
 			migrations.Migrate(context.Background(), cli.Pool)
+
+			cli.Pool.Exec(context.Background(), "DELETE FROM bots WHERE bot_id = 'SKIP' OR client_id = 'SKIP'")
 		},
 	})
 }

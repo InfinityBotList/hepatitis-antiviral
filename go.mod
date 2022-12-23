@@ -14,6 +14,7 @@ require (
 	github.com/VividCortex/ewma v1.2.0 // indirect
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/infinitybotlist/eureka v0.0.0-20221203142608-7547b65265c4 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.13.0 // indirect
 	github.com/jackc/pgproto3/v2 v2.3.1 // indirect

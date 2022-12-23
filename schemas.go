@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/infinitybotlist/eureka/crypto"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
@@ -77,6 +78,7 @@ type Bot struct {
 	TotalUptime      int64         `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
 	ClaimedBy        string        `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
 	Note             string        `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
+	QueueReason      string        `src:"queue_reason,omitempty" dest:"queue_reason" default:"null"` // Reason bot was approved or denied
 	Date             time.Time     `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
 	WebAuth          *string       `src:"webAuth,omitempty" dest:"web_auth" default:"null"`
 	WebURL           *string       `src:"webURL,omitempty" dest:"webhook" default:"null"`
@@ -246,7 +248,7 @@ var botTransforms = map[string]cli.TransformFunc{
 		if count == 0 {
 			cli.NotifyMsg("warning", "User not found, adding")
 
-			if _, err = cli.Pool.Exec(ctx, "INSERT INTO users (user_id, api_token, extra_links) VALUES ($1, $2, $3)", userId, RandString(128), []link{}); err != nil {
+			if _, err = cli.Pool.Exec(ctx, "INSERT INTO users (user_id, api_token, extra_links) VALUES ($1, $2, $3)", userId, crypto.RandString(128), []link{}); err != nil {
 				panic(err)
 			}
 		}
@@ -285,7 +287,7 @@ var botTransforms = map[string]cli.TransformFunc{
 		}
 
 		if count != 0 {
-			return strings.ToLower(name) + "-" + RandString(12)
+			return strings.ToLower(name) + "-" + crypto.RandString(12)
 		}
 
 		return strings.ToLower(name)
@@ -317,6 +319,7 @@ type OnboardData struct {
 type User struct {
 	UserID                    string    `src:"userID" dest:"user_id" unique:"true" default:"SKIP"`
 	Username                  string    `src:"username" dest:"username" default:"User"`
+	Experiments               []string  `src:"experiments" dest:"experiments" default:"{}"`
 	StaffOnboarded            bool      `src:"staff_onboarded" dest:"staff_onboarded" default:"false"`
 	StaffOnboardState         string    `src:"staff_onboard_state" dest:"staff_onboard_state" default:"'pending'"`
 	StaffOnboardLastStartTime time.Time `src:"staff_onboard_last_start_time,omitempty" dest:"staff_onboard_last_start_time" default:"null"`
@@ -385,7 +388,7 @@ var userTransforms = map[string]cli.TransformFunc{
 		return data.Username
 	}),
 	"APIToken": transform.DefaultTransform(func(tr cli.TransformRow) any {
-		return RandString(128)
+		return crypto.RandString(128)
 	}),
 	"ExtraLinks": func(tr cli.TransformRow) any {
 		var links = []link{}
@@ -454,7 +457,7 @@ var packTransforms = map[string]cli.TransformFunc{
 	"Bots": transform.ToList,
 	"URL": func(tr cli.TransformRow) any {
 		if tr.CurrentValue == nil {
-			return RandString(12)
+			return crypto.RandString(12)
 		}
 
 		reg, _ := regexp.Compile("[^a-zA-Z0-9 ]+")

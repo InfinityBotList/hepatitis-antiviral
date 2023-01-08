@@ -41,6 +41,7 @@ type UUID = string
 type Bot struct {
 	BotID            string        `src:"botID" dest:"bot_id" unique:"true"`
 	QueueName        string        `src:"botName" dest:"queue_name"`
+	QueueAvatar      string        `src:"avatar" dest:"queue_avatar"`
 	ClientID         string        `src:"clientID" dest:"client_id" unique:"true"`
 	Tags             []string      `src:"tags" dest:"tags"`
 	Prefix           *string       `src:"prefix" dest:"prefix"`
@@ -527,8 +528,6 @@ type Apps struct {
 	Answers          map[string]any `src:"answers" dest:"answers" default:"{}"`
 	InterviewAnswers map[string]any `src:"interviewAnswers" dest:"interview_answers" default:"{}"`
 	State            string         `src:"state" dest:"state" default:"'pending'"`
-	Likes            []int64        `src:"likes" dest:"likes" default:"{}"`
-	Dislikes         []int64        `src:"dislikes" dest:"dislikes" default:"{}"`
 }
 
 func main() {

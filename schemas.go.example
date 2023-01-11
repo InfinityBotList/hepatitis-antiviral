@@ -2,24 +2,18 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hepatitis-antiviral/cli"
 	"hepatitis-antiviral/migrations"
-	"hepatitis-antiviral/sources/jsonfile"
 	"hepatitis-antiviral/sources/mongo"
 	"hepatitis-antiviral/transform"
-	"io"
-	"net/http"
 	"os"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/infinitybotlist/eureka/crypto"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -304,20 +298,6 @@ func main() {
 		},
 		// Required
 		LoadSource: func(name string) (cli.Source, error) {
-			sess, err := discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
-
-			if err != nil {
-				panic(err)
-			}
-
-			sess.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
-
-			err = sess.Open()
-
-			if err != nil {
-				panic(err)
-			}
-
 			switch name {
 			case "mongo":
 				source = mongo.MongoSource{
@@ -333,19 +313,6 @@ func main() {
 				}
 
 				return source, nil
-			case "json":
-				jsonSource := jsonfile.JsonFileStore{
-					Filename:       "backup.json",
-					IgnoreEntities: []string{"sessions"},
-				}
-
-				err := jsonSource.Connect()
-
-				if err != nil {
-					return nil, err
-				}
-
-				return jsonSource, nil
 			}
 
 			return nil, errors.New("unknown source")

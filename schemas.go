@@ -472,7 +472,6 @@ type Reviews struct {
 	BotID    string    `src:"botID" dest:"bot_id" fkey:"bots,bot_id"`
 	Author   string    `src:"author" dest:"author" fkey:"users,user_id"`
 	Content  string    `src:"content" dest:"content" default:"'Very good bot!'"`
-	Rate     bool      `src:"rate" dest:"rate" default:"true"`
 	StarRate int       `src:"star_rate" dest:"stars" default:"1"`
 	Date     time.Time `src:"date" dest:"created_at" default:"NOW()"`
 	ParentID string    `src:"parentID,omitempty" dest:"parent_id" default:"null"`

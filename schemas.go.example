@@ -1,15 +1,32 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"io/ioutil"
+	"hepatitis-antiviral/cli"
+	"hepatitis-antiviral/migrations"
+	"hepatitis-antiviral/sources/jsonfile"
+	"hepatitis-antiviral/sources/mongo"
+	"hepatitis-antiviral/transform"
+	"io"
 	"net/http"
+	"os"
+	"reflect"
+	"regexp"
 	"strings"
 	"time"
+	"unicode"
 
-	"github.com/google/uuid"
+	"github.com/bwmarrin/discordgo"
+	"github.com/infinitybotlist/eureka/crypto"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+var sess *discordgo.Session
+
+var ctx = context.Background()
 
 // Schemas here
 //
@@ -17,74 +34,346 @@ import (
 
 // Tool below
 
-type Auth struct {
-	ID    *string `bson:"id,omitempty" json:"id" notnull:"true"`
-	Token string  `bson:"token" json:"token" notnull:"true"`
+var source mongo.MongoSource
+
+type UUID = string
+
+type Bot struct {
+	BotID            string        `src:"botID" dest:"bot_id" unique:"true"`
+	QueueName        string        `src:"botName" dest:"queue_name"`
+	QueueAvatar      string        `src:"avatar" dest:"queue_avatar"`
+	ClientID         string        `src:"clientID" dest:"client_id" unique:"true"`
+	Tags             []string      `src:"tags" dest:"tags"`
+	Prefix           *string       `src:"prefix" dest:"prefix"`
+	Owner            string        `src:"main_owner" dest:"owner" fkey:"users,user_id"`
+	AdditionalOwners []string      `src:"additional_owners" dest:"additional_owners" notnull:"true"`
+	StaffBot         bool          `src:"staff" dest:"staff_bot" default:"false"`
+	Short            string        `src:"short" dest:"short"`
+	Long             string        `src:"long" dest:"long"`
+	Library          *string       `src:"library" dest:"library" default:"'custom'"`
+	ExtraLinks       []any         `src:"extra_links" dest:"extra_links" mark:"jsonb"`
+	NSFW             bool          `src:"nsfw" dest:"nsfw" default:"false"`
+	Premium          bool          `src:"premium" dest:"premium" default:"false"`
+	PendingCert      bool          `src:"pending_cert" dest:"pending_cert" default:"false"`
+	Servers          int           `src:"servers" dest:"servers" default:"0"`
+	Shards           int           `src:"shards" dest:"shards" default:"0"`
+	Users            int           `src:"users" dest:"users" default:"0"`
+	ShardSet         []int         `src:"shardArray" dest:"shard_list" default:"{}"`
+	Votes            int           `src:"votes" dest:"votes" default:"0"`
+	Clicks           int           `src:"clicks" dest:"clicks" default:"0"`
+	InviteClicks     int           `src:"invite_clicks" dest:"invite_clicks" default:"0"`
+	Banner           *string       `src:"background,omitempty" dest:"banner" default:"null"`
+	Invite           *string       `src:"invite" dest:"invite" default:"null"`
+	Type             string        `src:"type" dest:"type" default:"'pending'"`
+	Vanity           *string       `src:"vanity" dest:"vanity" unique:"true"`
+	ExternalSource   string        `src:"external_source,omitempty" dest:"external_source" default:"null"`
+	ListSource       string        `src:"listSource,omitempty" dest:"list_source" mark:"uuid" default:"null"`
+	VoteBanned       bool          `src:"vote_banned,omitempty" dest:"vote_banned" default:"false" notnull:"true"`
+	CrossAdd         bool          `src:"cross_add" dest:"cross_add" default:"true" notnull:"true"`
+	StartPeriod      time.Time     `src:"start_period,omitempty" dest:"start_premium_period" default:"NOW()" notnull:"true"`
+	SubPeriod        time.Duration `src:"sub_period,omitempty" dest:"premium_period_length" default:"'12 hours'" mark:"interval" notnull:"true"`
+	CertReason       string        `src:"cert_reason,omitempty" dest:"cert_reason" default:"null"`
+	Announce         bool          `src:"announce,omitempty" dest:"announce" default:"false"`
+	AnnounceMessage  string        `src:"announce_msg,omitempty" dest:"announce_message" default:"null"`
+	Uptime           int64         `src:"uptime,omitempty" dest:"uptime" default:"0"`
+	TotalUptime      int64         `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
+	ClaimedBy        string        `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
+	Note             string        `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
+	QueueReason      string        `src:"queue_reason,omitempty" dest:"queue_reason" default:"null"` // Reason bot was approved or denied
+	Date             time.Time     `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
+	WebAuth          *string       `src:"webAuth,omitempty" dest:"web_auth" default:"null"`
+	WebURL           *string       `src:"webURL,omitempty" dest:"webhook" default:"null"`
+	WebHMac          *bool         `src:"webHMac" dest:"hmac" default:"false"`
+	UniqueClicks     []string      `src:"unique_clicks,omitempty" dest:"unique_clicks" default:"{}" notnull:"true"`
+	Token            string        `src:"token" dest:"api_token" default:"uuid_generate_v4()"`
+	LastClaimed      time.Time     `src:"last_claimed,omitempty" dest:"last_claimed" default:"null"`
 }
 
-type Apps struct {
-	UserID    string         `bson:"userID" json:"user_id" fkey:"users,user_id"`
-	Position  string         `bson:"position" json:"position"`
-	CreatedAt time.Time      `bson:"createdAt" json:"created_at" default:"NOW()"`
-	Answers   map[string]any `bson:"answers" json:"answers" default:"{}"`
-	State     string         `bson:"state" json:"state" default:"'pending'"`
-	Likes     []int64        `bson:"likes" json:"likes" default:"{}"`
-	Dislikes  []int64        `bson:"dislikes" json:"dislikes" default:"{}"`
-}
+var botTransforms = map[string]cli.TransformFunc{
+	"ClaimedBy": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return nil
+		}
 
-// Exported functions
+		if strings.ToLower(tr.CurrentValue.(string)) == "none" || tr.CurrentValue.(string) == "" {
+			return nil
+		}
 
-var exportedFuncs = map[string]*gfunc{
-	"uuidgen": {
-		param: "userID",
-		function: func(p any) any {
-			uuid := uuid.New()
-			return uuid.String()
-		},
+		return tr.CurrentValue
 	},
-	// Checks if user exists, otherwise adds one
-	"usercheck": {
-		param: "main_owner",
-		function: func(p any) any {
-			if p == nil {
-				return p
+	"StartPeriod": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		switch val := tr.CurrentValue.(type) {
+		case time.Time:
+			return val
+		case int32:
+			return time.Unix(0, int64(val*int32(time.Millisecond)))
+		case int64:
+			return time.Unix(0, int64(val*int64(time.Millisecond)))
+		case float64:
+			return time.Unix(0, int64(val*float64(time.Millisecond)))
+		}
+
+		panic("invalid type for StartPeriod")
+	},
+	"SubPeriod": func(tr cli.TransformRow) any {
+		// Convert to time.Duration
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		switch val := tr.CurrentValue.(type) {
+		case time.Duration:
+			return val
+		case int32:
+			return time.Duration(val) * time.Millisecond
+		case int64:
+			return time.Duration(val) * time.Millisecond
+		case float64:
+			return time.Duration(val) * time.Millisecond
+		}
+
+		panic("invalid type for SubPeriod: " + reflect.TypeOf(tr.CurrentValue).String())
+	},
+	"Type": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return "approved"
+		}
+
+		if val, ok := tr.CurrentRecord["certified"].(bool); ok && val {
+			return "certified"
+		}
+
+		if tr.CurrentValue == "approved" || tr.CurrentValue == "denied" {
+			return tr.CurrentValue
+		}
+
+		if val, ok := tr.CurrentRecord["claimed"].(bool); ok && val {
+			return "claimed"
+		}
+
+		return tr.CurrentValue
+	},
+	"UniqueClicks": func(tr cli.TransformRow) any {
+		return []string{}
+	},
+	"ExtraLinks": func(tr cli.TransformRow) any {
+		var links = []link{}
+
+		for _, cols := range []string{"Website", "Support", "Github", "Donate"} {
+			col := strings.ToLower(cols)
+			if tr.CurrentRecord[col] != nil {
+				value := parseLink(col, tr.CurrentRecord[col].(string))
+
+				if value == "" {
+					continue
+				}
+
+				links = append(links, link{
+					Name:  cols,
+					Value: value,
+				})
+			}
+		}
+
+		return links
+	},
+	"ClientID": transform.DefaultTransform(func(tr cli.TransformRow) any {
+		botId := tr.CurrentRecord["botID"].(string)
+
+		cli.NotifyMsg("info", "No client ID for bot "+botId+", finding one")
+		_, rerr := sess.Request("GET", "https://discord.com/api/v10/applications/"+botId+"/rpc", nil)
+
+		if rerr == nil {
+			source.Conn.Database("infinity").Collection("bots").UpdateOne(context.Background(), bson.M{
+				"botID": botId,
+			}, bson.M{
+				"$set": bson.M{
+					"clientID": botId,
+				},
+			})
+
+			return botId
+		}
+
+		for rerr != nil {
+			clientId := cli.PromptServerChannel("What is the client ID for " + botId + "?")
+
+			if clientId == "DEL" {
+				source.Conn.Database("infinity").Collection("bots").DeleteOne(context.Background(), bson.M{"botID": botId})
+				return "SKIP"
 			}
 
-			userId := p.(string)
+			_, rerr = sess.Request("GET", "https://discord.com/api/v10/applications/"+clientId+"/rpc", nil)
 
-			userId = strings.TrimSpace(userId)
+			if rerr != nil {
+				fmt.Println("Client ID fetch error:", rerr)
+				continue
+			}
 
-			var count int64
+			source.Conn.Database("infinity").Collection("bots").UpdateOne(context.Background(), bson.M{
+				"botID": botId,
+			}, bson.M{
+				"$set": bson.M{
+					"clientID": clientId,
+				},
+			})
 
-			err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
+			return clientId
+		}
+
+		return botId
+	}),
+	"AdditionalOwners": transform.ToList,
+	"Tags":             transform.ToList,
+	"Owner": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			return nil
+		}
+
+		userId := tr.CurrentValue.(string)
+
+		userId = strings.TrimSpace(userId)
+
+		var count int64
+
+		err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE user_id = $1", userId).Scan(&count)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if count == 0 {
+			cli.NotifyMsg("warning", "User not found, adding")
+
+			if _, err = cli.Pool.Exec(ctx, "INSERT INTO users (user_id, api_token, extra_links) VALUES ($1, $2, $3)", userId, crypto.RandString(128), []link{}); err != nil {
+				panic(err)
+			}
+		}
+
+		return userId
+	},
+	"Vanity": func(tr cli.TransformRow) any {
+		if tr.CurrentValue == nil {
+			cli.NotifyMsg("error", "Got nil name for current context: "+fmt.Sprint(tr.CurrentRecord["botID"]))
+			panic("Got nil name")
+		}
+
+		name := tr.CurrentValue.(string)
+
+		// Strip out unicode characters
+		name = strings.Map(func(r rune) rune {
+			if r > unicode.MaxASCII {
+				return -1
+			}
+			return r
+		}, name)
+
+		if name == "" {
+			panic("Got empty name")
+		}
+
+		name = strings.TrimSuffix(name, "-")
+
+		// Check if vanity is taken
+		var count int64
+
+		err := cli.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM bots WHERE lower(vanity) = $1", strings.ToLower(name)).Scan(&count)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if count != 0 {
+			return strings.ToLower(name) + "-" + crypto.RandString(12)
+		}
+
+		return strings.ToLower(name)
+	},
+}
+
+func main() {
+	// Place all schemas to be used in the tool here
+
+	cli.Main(cli.App{
+		SchemaOpts: cli.SchemaOpts{
+			TableName: "infinity",
+		},
+		// Required
+		LoadSource: func(name string) (cli.Source, error) {
+			sess, err := discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
 
 			if err != nil {
 				panic(err)
 			}
 
-			if count == 0 {
-				notifyMsg("warning", "User not found, adding")
+			sess.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
 
-				if _, err = pool.Exec(ctx, "INSERT INTO users (user_id, api_token) VALUES ($1, $2)", p, RandString(128)); err != nil {
-					panic(err)
-				}
+			err = sess.Open()
+
+			if err != nil {
+				panic(err)
 			}
 
-			return userId
+			switch name {
+			case "mongo":
+				source = mongo.MongoSource{
+					ConnectionURL:  os.Getenv("MONGO"),
+					DatabaseName:   "infinity",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := source.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return source, nil
+			case "json":
+				jsonSource := jsonfile.JsonFileStore{
+					Filename:       "backup.json",
+					IgnoreEntities: []string{"sessions"},
+				}
+
+				err := jsonSource.Connect()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return jsonSource, nil
+			}
+
+			return nil, errors.New("unknown source")
 		},
-	},
-}
+		BackupFunc: func(source cli.Source) {
+			var err error
+			sess, err = discordgo.New("Bot " + os.Getenv("DISCORD_TOKEN"))
 
-// Place all schema options here
-func getOpts() schemaOpts {
-	return schemaOpts{
-		TableName: "infinity",
-	}
-}
+			if err != nil {
+				panic(err)
+			}
 
-// Place all schemas to be used in the tool here
-func backupSchemas() {
-	backupTool("oauths", Auth{}, backupOpts{})
+			sess.Identify.Intents = discordgo.IntentsGuilds | discordgo.IntentsGuildMembers
 
-	backupTool("apps", Apps{}, backupOpts{})
+			err = sess.Open()
+
+			if err != nil {
+				panic(err)
+			}
+
+			cli.BackupTool(source, "bots", Bot{}, cli.BackupOpts{
+				IndexCols:  []string{"bot_id", "staff_bot", "cross_add", "api_token", "lower(vanity)"},
+				Transforms: botTransforms,
+			})
+
+			migrations.Migrate(context.Background(), cli.Pool)
+
+			cli.Pool.Exec(context.Background(), "DELETE FROM bots WHERE bot_id = 'SKIP' OR client_id = 'SKIP'")
+		},
+	})
 }

@@ -54,7 +54,6 @@ type Bot struct {
 	ExtraLinks       []any         `src:"extra_links" dest:"extra_links" mark:"jsonb"`
 	NSFW             bool          `src:"nsfw" dest:"nsfw" default:"false"`
 	Premium          bool          `src:"premium" dest:"premium" default:"false"`
-	PendingCert      bool          `src:"pending_cert" dest:"pending_cert" default:"false"`
 	Servers          int           `src:"servers" dest:"servers" default:"0"`
 	Shards           int           `src:"shards" dest:"shards" default:"0"`
 	Users            int           `src:"users" dest:"users" default:"0"`
@@ -320,6 +319,7 @@ type OnboardData struct {
 type User struct {
 	UserID                    string    `src:"userID" dest:"user_id" unique:"true" default:"SKIP"`
 	Username                  string    `src:"username" dest:"username" default:"User"`
+	Avatar                    string    `src:"avatar" dest:"avatar" default:"'unset'"`
 	Experiments               []string  `src:"experiments" dest:"experiments" default:"{}"`
 	StaffOnboarded            bool      `src:"staff_onboarded" dest:"staff_onboarded" default:"false"`
 	StaffOnboardState         string    `src:"staff_onboard_state" dest:"staff_onboard_state" default:"'pending'"`
@@ -337,7 +337,8 @@ type User struct {
 	ExtraLinks                []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`
 	APIToken                  string    `src:"apiToken" dest:"api_token"`
 	About                     *string   `src:"about,omitempty" dest:"about" default:"'I am a very mysterious person'"`
-	VoteBanned                bool      `src:"vote_banned,omitempty" dest:"vote_banned" default:"false"`
+	VoteBanned                bool      `src:"vote_banned" dest:"vote_banned" default:"false"`
+	Banned                    bool      `src:"banned" dest:"banned" default:"false"`
 }
 
 var userTransforms = map[string]cli.TransformFunc{
@@ -474,7 +475,7 @@ type Reviews struct {
 	Content  string    `src:"content" dest:"content" default:"'Very good bot!'"`
 	StarRate int       `src:"star_rate" dest:"stars" default:"1"`
 	Date     time.Time `src:"date" dest:"created_at" default:"NOW()"`
-	ParentID string    `src:"parentID,omitempty" dest:"parent_id" default:"null"`
+	ParentID string    `src:"parentID,omitempty" dest:"parent_id" mark:"uuid" default:"null"`
 }
 
 var reviewTransforms = map[string]cli.TransformFunc{
@@ -496,10 +497,11 @@ type Tickets struct {
 }
 
 type Alerts struct {
-	UserID  string `src:"userID" dest:"user_id" fkey:"users,user_id"`
-	URL     string `src:"url" dest:"url"`
-	Message string `src:"message" dest:"message"`
-	Type    string `src:"type" dest:"type"`
+	UserID  string         `src:"userID" dest:"user_id" fkey:"users,user_id"`
+	URL     string         `src:"url" dest:"url"`
+	Message string         `src:"message" dest:"message"`
+	Type    string         `src:"type" dest:"type"`
+	Data    map[string]any `src:"data" dest:"data" default:"{}"`
 }
 
 type Poppypaw struct {
@@ -519,14 +521,22 @@ type Silverpelt struct {
 	LastAcked time.Time `src:"lastAcked" dest:"last_acked" default:"NOW()"`
 }
 
+type RPCRequests struct {
+	UserID    string    `src:"userID" dest:"user_id" fkey:"users,user_id"`
+	Method    string    `src:"method" dest:"method"`
+	CreatedAt time.Time `src:"createdAt" dest:"created_at" default:"NOW()"`
+}
+
 type Apps struct {
-	AppID            string         `src:"appID" dest:"app_id"`
-	UserID           string         `src:"userID" dest:"user_id" fkey:"users,user_id"`
-	Position         string         `src:"position" dest:"position"`
-	CreatedAt        time.Time      `src:"createdAt" dest:"created_at" default:"NOW()"`
-	Answers          map[string]any `src:"answers" dest:"answers" default:"{}"`
-	InterviewAnswers map[string]any `src:"interviewAnswers" dest:"interview_answers" default:"{}"`
-	State            string         `src:"state" dest:"state" default:"'pending'"`
+	AppID              string         `src:"appID" dest:"app_id"`
+	UserID             string         `src:"userID" dest:"user_id" fkey:"users,user_id"`
+	Position           string         `src:"position" dest:"position"`
+	CreatedAt          time.Time      `src:"createdAt" dest:"created_at" default:"NOW()"`
+	Questions          map[string]any `src:"questions" dest:"questions" default:"{}"`
+	Answers            map[string]any `src:"answers" dest:"answers" default:"{}"`
+	InterviewQuestions map[string]any `src:"iquestions" dest:"interview_questions" default:"{}"`
+	InterviewAnswers   map[string]any `src:"interviewAnswers" dest:"interview_answers" default:"{}"`
+	State              string         `src:"state" dest:"state" default:"'pending'"`
 }
 
 func main() {
@@ -635,6 +645,8 @@ func main() {
 				IgnoreFKError: true,
 				RenameTo:      "tickets",
 			})
+
+			cli.BackupTool(source, "rpc_requests", RPCRequests{}, cli.BackupOpts{})
 
 			cli.BackupTool(source, "poppypaw", Poppypaw{}, cli.BackupOpts{})
 

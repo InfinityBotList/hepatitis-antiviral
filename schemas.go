@@ -322,6 +322,7 @@ type User struct {
 	StaffOnboardMacroTime     time.Time `src:"staff_onboard_macro_time,omitempty" dest:"staff_onboard_macro_time" default:"null"`
 	StaffOnboardSessionCode   string    `src:"staff_onboard_session_code,omitempty" dest:"staff_onboard_session_code,omitempty" default:"null"`
 	StaffOnboardGuild         string    `src:"staff_onboard_guild,omitempty" dest:"staff_onboard_guild,omitempty" default:"null"`
+	StaffRPCLastVerify        time.Time `src:"staff_rpc_last_verify" dest:"staff_rpc_last_verify" default:"NOW() - interval '1 hour'"`
 	Staff                     bool      `src:"staff" dest:"staff" default:"false"`
 	Admin                     bool      `src:"admin" dest:"admin" default:"false"`
 	HAdmin                    bool      `src:"hadmin" dest:"hadmin" default:"false"`

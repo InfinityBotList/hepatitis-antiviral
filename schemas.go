@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hepatitis-antiviral/cli"
@@ -10,8 +9,6 @@ import (
 	"hepatitis-antiviral/sources/jsonfile"
 	"hepatitis-antiviral/sources/mongo"
 	"hepatitis-antiviral/transform"
-	"io"
-	"net/http"
 	"os"
 	"reflect"
 	"regexp"
@@ -318,8 +315,6 @@ type OnboardData struct {
 
 type User struct {
 	UserID                    string    `src:"userID" dest:"user_id" unique:"true" default:"SKIP"`
-	Username                  string    `src:"username" dest:"username" default:"User"`
-	Avatar                    string    `src:"avatar" dest:"avatar" default:"'unset'"`
 	Experiments               []string  `src:"experiments" dest:"experiments" default:"{}"`
 	StaffOnboarded            bool      `src:"staff_onboarded" dest:"staff_onboarded" default:"false"`
 	StaffOnboardState         string    `src:"staff_onboard_state" dest:"staff_onboard_state" default:"'pending'"`
@@ -334,6 +329,7 @@ type User struct {
 	IBLDev                    bool      `src:"ibldev" dest:"ibldev" default:"false"`
 	IBLHDev                   bool      `src:"iblhdev" dest:"iblhdev" default:"false"`
 	Developer                 bool      `src:"developer" dest:"developer" default:"false"`
+	CaptchaSponsorEnabled     bool      `src:"captcha_sponsor_enabled" dest:"captcha_sponsor_enabled" default:"true"`
 	ExtraLinks                []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`
 	APIToken                  string    `src:"apiToken" dest:"api_token"`
 	About                     *string   `src:"about,omitempty" dest:"about" default:"'I am a very mysterious person'"`
@@ -351,44 +347,6 @@ var userTransforms = map[string]cli.TransformFunc{
 
 		return strings.TrimSpace(userId)
 	},
-	"Username": transform.DefaultTransform(func(tr cli.TransformRow) any {
-		userId := tr.CurrentRecord["userID"].(string)
-
-		// Call http://localhost:8080/_duser/ID
-		resp, err := http.Get("http://localhost:8080/_duser/" + userId)
-
-		if err != nil {
-			fmt.Println("User fetch error:", err)
-			return nil
-		}
-
-		if resp.StatusCode != 200 {
-			fmt.Println("User fetch error:", resp.StatusCode)
-			return nil
-		}
-
-		// Read the response body
-		body, err := io.ReadAll(resp.Body)
-
-		if err != nil {
-			fmt.Println("User fetch error:", err)
-			return nil
-		}
-
-		var data struct {
-			Username string `dest:"username"`
-		}
-
-		// Unmarshal the response body
-		err = json.Unmarshal(body, &data)
-
-		if err != nil {
-			fmt.Println("User fetch error:", err)
-			return nil
-		}
-
-		return data.Username
-	}),
 	"APIToken": transform.DefaultTransform(func(tr cli.TransformRow) any {
 		return crypto.RandString(128)
 	}),

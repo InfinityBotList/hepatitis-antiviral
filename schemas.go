@@ -490,7 +490,7 @@ type Apps struct {
 	AppID          string         `src:"appID" dest:"app_id"`
 	UserID         string         `src:"userID" dest:"user_id" fkey:"users,user_id"`
 	Position       string         `src:"position" dest:"position"`
-	ReviewFeedback string         `src:"review_feedback" dest:"review_feedback" notnull:"true" notnull:"true"`
+	ReviewFeedback string         `src:"review_feedback,omitempty" dest:"review_feedback" default:"null"`
 	CreatedAt      time.Time      `src:"createdAt" dest:"created_at" default:"NOW()"`
 	Questions      map[string]any `src:"questions" dest:"questions" default:"{}"`
 	Answers        map[string]any `src:"answers" dest:"answers" default:"{}"`

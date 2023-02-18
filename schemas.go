@@ -75,7 +75,6 @@ type Bot struct {
 	TotalUptime      int64         `src:"total_uptime,omitempty" dest:"total_uptime" default:"0"`
 	ClaimedBy        string        `src:"claimedBy,omitempty" dest:"claimed_by" default:"null"`
 	Note             string        `src:"note,omitempty" dest:"approval_note" default:"'No note'" notnull:"true"`
-	QueueReason      string        `src:"queue_reason,omitempty" dest:"queue_reason" default:"null"` // Reason bot was approved or denied
 	Date             time.Time     `src:"date,omitempty" dest:"created_at" default:"NOW()" notnull:"true"`
 	WebAuth          *string       `src:"webAuth,omitempty" dest:"web_auth" default:"null"`
 	WebURL           *string       `src:"webURL,omitempty" dest:"webhook" default:"null"`
@@ -329,6 +328,7 @@ type User struct {
 	Certified                 bool      `src:"certified" dest:"certified" default:"false"`
 	IBLDev                    bool      `src:"ibldev" dest:"ibldev" default:"false"`
 	IBLHDev                   bool      `src:"iblhdev" dest:"iblhdev" default:"false"`
+	Owner                     bool      `src:"owner" dest:"owner" default:"false"`
 	Developer                 bool      `src:"developer" dest:"developer" default:"false"`
 	CaptchaSponsorEnabled     bool      `src:"captcha_sponsor_enabled" dest:"captcha_sponsor_enabled" default:"true"`
 	ExtraLinks                []any     `src:"extra_links" dest:"extra_links" mark:"jsonb"`

@@ -497,6 +497,17 @@ type Apps struct {
 	State          string         `src:"state" dest:"state" default:"'pending'"`
 }
 
+type Blog struct {
+	Slug        string    `src:"s" dest:"slug"`
+	Title       string    `src:"title" dest:"title"`
+	Description string    `src:"description" dest:"description"`
+	UserID      string    `src:"userID" dest:"user_id" fkey:"users,user_id"`
+	CreatedAt   time.Time `src:"createdAt" dest:"created_at" default:"NOW()"`
+	Content     string    `src:"content" dest:"content"`
+	Draft       bool      `src:"draft" dest:"draft"`
+	Tags        []string  `src:"tags" dest:"tags"`
+}
+
 func main() {
 	// Place all schemas to be used in the tool here
 
@@ -617,6 +628,8 @@ func main() {
 			cli.BackupTool(source, "onboard_data", OnboardData{}, cli.BackupOpts{})
 
 			cli.BackupTool(source, "pack_votes", PackVotes{}, cli.BackupOpts{})
+
+			cli.BackupTool(source, "blogs", Blog{}, cli.BackupOpts{})
 
 			migrations.Migrate(context.Background(), cli.Pool)
 
